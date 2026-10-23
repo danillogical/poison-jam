@@ -7394,7 +7394,9 @@ unchanged. Both probes were written by the same author as the implementation, so
 a cross-check, not an independent oracle.
 
 **Windows receipts.** `just build` succeeded (57 targets / 162 tests derived, identity recorded,
-Vulkan capability present); full limited CTest **162/162 in 517.47 s**, exit 0, full log retained;
+Vulkan capability present); full limited CTest **162/162 in 518.59 s**, exit 0, full log retained
+(the 517.47 s in the first version of this record was a transcription error: the retained log at
+`logs/d4step4-ctest-full.log` ends with its own `Total Test time (real) = 518.59 sec`);
 `just check` green including the real corpus re-derivation (126/126). Bounded 8 s strict Vulkan
 smoke `20261022-142342-065-d4step4-bump-smoke2` (`RECOMP_GPU_ACK=0`, pipeline cache off, runner-owned
 isolated save root): `diagnostic_deadline` at the requested deadline, checkpoints passed, save root
@@ -7412,32 +7414,44 @@ show NOTHING about the title's own bump state. A third 8 s strict smoke,
 both `patch_sha256` values empty, so its receipt matches the durable tree: same deadline, same
 checkpoints and save-root verification, no fatal or ICALL, and again no bump or rc counters.
 
-**Divergences step 5 must decide.** (1) This code divides the stage coordinate by `w` before adding
-the delta, matching the file's existing modes 1/2; xemu's BUMPENVMAP samples `pT.xy + dsdt` with no
-divide while its own PROJECT2D uses `textureProj`, so xemu is internally inconsistent there and
-every fixture here has `w = 1`. (2) xemu uses the source texel's `bg` directly for signed (snorm)
+**Reference rule and the correction it forced (2026-10-22 repair).** `psh.c` initializes `pT0..3`
+directly from `vtxT0..3` with no prior texture-q divide, gives PROJECT2D its own projected path
+(`textureProj`), and has BUMPENVMAP/BUMPENVMAP_LUM sample `pT.xy + dsdt` with no q division. That is
+a deliberate per-mode rule, NOT internally inconsistent reference paths. The first version of this
+record instead described it as an inconsistency and implemented modes 6/7 by dividing the stage
+coordinate by q before adding the delta, matching modes 1/2. An independent review measured that
+against the actual CPU translation unit: with an 8x8 linear gradient, stage 1 mode 6/7, zero matrix
+and coordinate `(6,4,0,q)`, q=1 selected the reference texel `(6,4)` (literal RGB 192/128/10) while
+q=2 selected `(3,2)` (96/64/5). The repair adds the delta to the stage's own incoming xy in both the
+CPU executor and the HLSL, leaves modes 1/2 (and 3/4/5) untouched, and a different-author focused
+gate now decides it (TR §31.76). Remaining step-5 items are unchanged: signed (snorm) bump inputs,
+cube/volume bump stages, rect-remap interaction, and the full committed-stream formula/pixel gate.
+
+**Divergences step 5 must still decide.** (1) xemu uses the source texel's `bg` directly for signed (snorm)
 bump inputs and `sign3` otherwise; this repository's `rc_texel` decodes UNORM only, so `sign3` is
-uniform. (3) Cube textures on a bump stage use the face-0 projection precedent from modes 1/2/4;
-xemu asserts 2D/3D there. (4) Rect-texture remap: xemu applies its `norm%d` remap to the perturbed
+uniform. (2) Cube textures on a bump stage use the face-0 projection precedent from modes 1/2/4;
+xemu asserts 2D/3D there. (3) Rect-texture remap: xemu applies its `norm%d` remap to the perturbed
 coordinate, while this back end applies the delta in the stage coordinate's own space and lets
 `ts.xy` convert a linear format to normalized units afterwards. Those are NOT in conflict for the
 two format classes this repository decodes — `rc_texel` samples a swizzled format at the coordinate
 directly after scaling it by width/height, and samples a linear format in texel units, while
-`ts.xy` is 1.0 for a swizzled texture and 1/width for a linear one, so `(t/q + dsdt) * ts.xy` and
-`rc_texel`'s own scaling agree in both cases — but a rect texture is the one class where the two
-conventions could diverge, and no fixture here uses one. (5) Sampler clamping/border behaviour is
-unchanged and unclaimed.
+`ts.xy` is 1.0 for a swizzled texture and 1/width for a linear one, so the bump stage's
+`(t.xy + dsdt) * ts.xy` and `rc_texel`'s own scaling agree in both cases — but a rect texture is the
+one class where the two conventions could diverge, and no fixture here uses one. (4) Sampler
+clamping/border behaviour is unchanged and unclaimed.
 
 **Step 5, a different author, must** write an independent formula oracle without reading these
-bodies, decide divergence 1 with a `w != 1` case, prove CPU/Vulkan pixel agreement on a bump fixture
-where the perturbed texel is visible in the readback rather than only in a counter, and fail with a
-named assertion on each negative control (zero matrix, transpose, du/dv swapped, luminance scale
-dropped, stage-0 discarded registers), plus an explicit statement that modes 8..31 and stage-3 cube
-still take the fallback. No in-game bump correction, D4 completion, D5 completion or hardware-fidelity
-claim is made. This first admission consumed one carried normal slot: D4 stands at **8 operations /
-3 historical repair allowances**, leaving **2 normal operations / 0 repair cycles**; the nine
+bodies, prove CPU/Vulkan pixel agreement on a bump fixture where the perturbed texel is visible in
+the readback rather than only in a counter, and fail with a named assertion on each negative control
+(zero matrix, transpose, du/dv swapped, luminance scale dropped, stage-0 discarded registers), plus
+an explicit statement that modes 8..31 and stage-3 cube still take the fallback. No in-game bump
+correction, D4 completion, D5 completion or hardware-fidelity
+claim is made. This first admission consumed one carried normal slot: D4 stood at **8 operations /
+3 historical repair allowances**, leaving 2 normal operations / 0 repair cycles at that point; the nine
 preflight operations/five repair allowances stay separate and closed; the paused lineage and the
-failed attempt's sole REQUEST_HUMAN decision are preserved.
+failed attempt's sole REQUEST_HUMAN decision are preserved. **Superseded by §31.76**, whose repair
+admission consumed the remaining carried slot and the granted repair allowance, leaving 1 normal
+operation / 0 repair cycles.
 
 **Deliberately unpushed.** The candidate commits are local only and have NO `PUSHED_TO` line, by
 instruction: toolkit `2a3c1e9` (modes 6/7) and `5e38bb4` (`stage_ge6` bucket comment), game
@@ -7445,3 +7459,102 @@ instruction: toolkit `2a3c1e9` (modes 6/7) and `5e38bb4` (`stage_ge6` bucket com
 corrections) and `08103d7` (durable-tree smoke receipt). They stay unpushed until step 5's
 different-author deciding gate and Codex acceptance; their absence from origin is intended, not a
 lost or failed push. The `PUSHED_TO:` line above belongs to the earlier blocked-checkpoint commit.
+
+### §31.76 D4 step 4 repair: the bump coordinate stops dividing by texture q, and the binding predicate becomes the sampled-mode set (2026-10-22)
+
+Codex rejected the §31.75 candidate (`op_0mvjxma8fc27368285ca28b24` / run
+`run_0mvjxl3bpc8b0e8dc8eb386e2`, sole STOP `soleSTOPdec_0mvk3pb0h4c42082ca8a9d576`) with two
+demonstrated defects, recorded in `logs/reports/d4-step4-q-codex-review-2026-10-22.md` and repaired in
+`logs/reports/d4-step4-q-binding-repair-2026-10-22.md`. This is a bounded correctness repair, not
+acceptance; full step 5 stays a separate, differently-authored gate.
+
+**R1, the q division.** The selected reference `xemu` `478b4f49…c4300` `psh.c` initialises `pT0..3`
+directly from `vtxT0..3` with no prior divide, projects only in PROJECT2D, and has the bump modes
+sample `pT.xy + dsdt`. That is a per-mode rule, and §31.75's reading of it as an internal inconsistency
+was wrong. Measured against the actual CPU translation unit with an 8x8 linear gradient, stage 1 mode
+6/7, zero matrix and coordinate `(6,4,0,q)`, q=1 selected the reference texel `(6,4)` (RGB 192/128/10)
+while q=2 selected `(3,2)` (96/64/5). The repair adds the delta to the stage's own incoming xy in both
+`rc_stage_fetch` and the HLSL `fetch`; modes 1/2 keep their divide and 3/4/5 are untouched.
+
+**R2, the binding predicate.** `vb_rc_prepare` had widened the sampled-mode membership from 1..3 to
+1..7, doing image and sampler work for PASSTHRU (4) and CLIPPLANE (5), which sample no image. Restored
+to the exact set `{1,2,3,6,7}`.
+
+**Focused different-author gate.** New game tests `tests/test_bumpenv_q_cpu.c`,
+`tests/test_bumpenv_q_vk.c` and `tests/bumpenv-q-private-control.py`, authored by a worker distinct from
+both the production author and the primary. Expectations are hand-derived from a gate-defined 8x8
+linear gradient (R identifies x, G identifies y), with `sign3` deltas `du = 104/127`, `dv = 48/127` and
+`lum = 64/255`: zero matrix → `(6,4)` = `0xFF8038B0`; matrix `[-0.25,0.125,0.125,0.5]` → `(5,4)` =
+`0xFF7038A0`; matrix `[0.5,0.125,0.5,0.5]` → `(6,4)`; mode 7 → `0xC0602A84`. The CPU half is a labelled
+DIRECT HELPER SEAM (real `rc_stage_fetch`, no rasteriser, no committed stream); the Vulkan half drives
+the real `vb_draw` + `vb_flip` on lavapipe and reads the texel out of guest memory, with one labelled
+stand-in decoder that reads a linear 32-bit texel exactly as production `sample_tex` does. No shader is
+compiled at run time.
+
+GREEN 8/8, exit 0: q=1 and q=2 select the SAME hand-derived texel for the zero, displacement, positive
+delta and luminance cases in both the CPU seam and the AOT Vulkan path; PROJECT2D still lands on
+`0xFF502870` at q=2, so globally deleting the divide cannot pass; the production binding witness shows
+modes 4/5 upload 0 and leave no cache entry while modes 1/2/3/6/7 upload and bind, witnessed from
+`g.st.tex_uploads`, `g.st.tex_hits` and `g.texs[]` after a warm-up that makes stage 0 a cache hit.
+Private controls (`scripts/bumpenv-q-controls.py`, a hand-run harness like `scripts/pbcov-mutants.py`,
+deliberately not CTest-registered, run against a private copy of the toolkit outside both repositories),
+two consecutive `--control all` runs both `RESULT: PASS`: restoring the bump q divide goes RED on named
+assertions in the CPU bump cases and the Vulkan bump rows while `project2d_control` stays green;
+restoring the `m > 7` range guard goes RED on the two named mode 4/5 upload assertions plus the two
+cache-entry assertions. Shared source hashes are identical before and after both controls (`b87f0ad0…`,
+`d13cbb54…`, `313509a3…`). Primary review found and had the gate author fix four defects in its own
+files: a header that derived `du` with the wrong sign (no assertion depended on it); a displacement
+check written `chk(got_q1 != got_q2 ? 0 : 1, …)` that failed exactly when the two q agreed; a harness
+scratch directory under `%TEMP%`, where MSBuild's own `MSB8029` warning says incremental builds are
+unreliable, which let a restore half run a stale mutated object and report a false `expected GREEN`
+failure; and — the durable cause of that staleness — the `#include`d production files were not declared
+dependencies of the test objects, so an edit to the file under test need not recompile the object that
+includes it. `OBJECT_DEPENDS` now states both dependencies (verified to force a recompile by a
+whitespace-only edit to a private copy), and the harness forces a clean rebuild before every build and
+refuses to emit a verdict when consecutive builds are byte-identical. The earlier controls' RED halves
+are sound — each first build already contained the mutation — but their GREEN halves rested on an
+`os.utime` mtime bump and are superseded by the two runs above.
+
+**Windows receipts.** Guarded build exit 0, 59 targets / 170 tests derived, identity recorded. Focused
+`ctest -R "jsrf_bumpenv_q"` 8/8 in 1.46 s. Full limited CTest **170/170 in 550.19 s**, exit 0
+(`logs/d4step4q-ctest-full3.log`, on the final tree after the `OBJECT_DEPENDS` change; an earlier run on
+the pre-change tree was 170/170 in 521.25 s); a first run was 168/170 because G1 stages tracked files only and the
+two new tests were untracked — reproduced in a tracked-only scratch tree, fixed by staging, G1 then
+PASS including its mutants and negative control — and because `xbox_guest_meter` flaked once on its own
+lock timing (a toolkit test with no dependency on these files; 3/3 alone, 12/12 under
+`--repeat until-fail:12`, and green in the clean run). `just check` exit 0 including the real corpus
+re-derivation (126/126). One 8 s strict isolated Vulkan smoke
+`20261022-173449-960-d4step4q-repair-smoke` (`RECOMP_GPU_ACK=0`, `RECOMP_PB_EXEC=1`, pipeline cache off,
+runner-owned save root): `diagnostic_deadline`, checkpoints passed, save root verified,
+`gpu_report_ok` true, executor registered, no fatal or ICALL, 323 named frames, Intel Iris Xe this run.
+It reaches no bump batch and logs no bump or rc counters, so it proves launch, admission and executor
+liveness only — never executed bump sampling. No validation layer was inserted and no validation claim
+is made.
+
+**Remaining limits, unchanged.** Signed (snorm) bump inputs (UNORM-only `rc_texel`, so `sign3` is
+uniform), cube/volume bump stages (face-0 precedent, unmeasured), rect-texture remap (no fixture), and
+modes 8..31 / stage-3 cube still falling back. The full committed-stream formula and pixel oracle, the
+complete bump matrix/source/luminance/format coverage and the old-red/final-green sequence are step 5's,
+written by a further different author. No in-game bump correction, D4 or D5 completion, or
+hardware-fidelity claim is made.
+
+**Accounting.** This first repair admission consumed one carried normal slot AND the single granted
+repair allowance, even though the bridge counted it as a first turn. The grant is the owner's own
+repair-packet instruction for this operation ("SkillconfirmedNEWreview renews ONLY1exhausted
+repairallowance; carries EXACT2existingnormaloperation slots … THIS FIRSTrepairadmission consumes
+1existingnormalslot AND1grantedrepairallowance despite bridgefirstturnrem0"), not a renewal asserted
+here. Cumulative D4 after it: **9
+operations / 4 historical repair allowances**, leaving **1 normal operation / 0 repair cycles** for the
+separate full step 5. No refund, reset or extra slot was taken, and no additional operation slot exists.
+The nine preflight operations and five repair allowances stay separate and closed. The paused lineage
+(`run_0mvimyj9w60c7e52804ec4fd0` / `op_0mvioc9a16ceedfaee328d140` /
+`soleSTOPdec_0mvizmpv0aac1f9f84eb5bcc0`), the failed read-only attempt's
+`sole REQUEST_HUMAN dec_0mvjx6nil57f7620b42083b1c`, and the rejected candidate's
+`soleSTOPdec_0mvk3pb0h4c42082ca8a9d576` are all preserved.
+
+**Deliberately unpushed.** This repair's candidate commits are local only, with no `PUSHED_TO` line, by
+instruction: toolkit `d9153fd` (the bump coordinate and binding repair), game `eacd525` (the
+different-author focused gate, its `OBJECT_DEPENDS` registration and the private-control harness) and
+the records commit that carries this section. They stay unpushed until step 5's different-author
+deciding gate and independent Codex acceptance; their absence from origin is intended, not a lost or
+failed push.

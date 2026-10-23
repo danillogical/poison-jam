@@ -66,12 +66,42 @@ assertions, and **three** bounded 8 s strict Vulkan smokes with pipeline cache o
 save root — two with the executor registered, the third on the committed tree with empty patch
 hashes — plus one discarded first attempt whose save-root override was a self-inflicted invocation
 error. No validation layer was inserted, so no validation claim is made.
-**This is not the deciding gate.** The step-5 author must differ from the implementation author and
-must write an independent formula oracle, decide the `w`-divide divergence with a `w != 1` case,
-prove CPU/Vulkan pixel agreement on a bump fixture, and fail each negative control with a named
-assertion. No in-game bump correction is claimed: the smokes say nothing about the title's own bump
-state. This first admission consumed one carried normal slot, so the D4 allowance is now two normal
-operations and zero repair cycles, with no slot refunded. No D4 or D completion.
+
+**Codex rejected that candidate** (`soleSTOPdec_0mvk3pb0h4c42082ca8a9d576`) on two demonstrated
+defects, and a bounded repair landed (TR §31.76, report
+`logs/reports/d4-step4-q-binding-repair-2026-10-22.md`). (1) The bump modes divided the stage
+coordinate by texture q before adding the delta. The selected reference initialises `pT` from `vtxT`
+with no prior divide, projects only in PROJECT2D, and has the bump modes sample `pT.xy + dsdt`; that
+is a per-mode rule, and the earlier reading of it as an internal inconsistency was wrong. Measured
+against the actual CPU translation unit, q=2 selected a different texel from q=1. The delta is now
+added to the incoming xy in both the CPU executor and the HLSL, with modes 1/2/3/4/5 unchanged. (2)
+The stage-0 texture bind had widened from `m > 3` to `m > 7`, doing image and sampler work for
+PASSTHRU and CLIPPLANE; it is now the exact sampled-mode set `{1,2,3,6,7}`. A different-author
+focused gate (`tests/test_bumpenv_q_cpu.c`, `tests/test_bumpenv_q_vk.c`,
+`scripts/bumpenv-q-controls.py`) decides both with hand-derived texel expectations: 8/8 GREEN,
+bump selection independent of q in the CPU seam and in the actual AOT Vulkan path, PROJECT2D still
+projecting so a global divide deletion cannot pass, a production binding witness for modes 4/5 versus
+1/2/3/6/7, and two private controls that each go RED with named assertions and return GREEN. Primary
+review also caught a stale-object hazard in that gate: the `#include`d production files were not
+declared dependencies of the test objects, so a restored private build could run a mutated object;
+`OBJECT_DEPENDS` now states them, the harness forces a clean rebuild before every build and refuses a
+verdict when consecutive builds are byte-identical, and its scratch directory moved out of `%TEMP%`
+where MSBuild's `MSB8029` warns incremental builds are unreliable.
+Windows: guarded build, full limited CTest **170/170 in 550.19 s**, `just check` green including the
+real corpus re-derivation, and one 8 s strict smoke with the executor registered that reaches no bump
+batch. Two of those checks first failed for reasons outside the production change and are recorded:
+G1 stages tracked files only, so the new tests had to be staged; `xbox_guest_meter` flaked once on its
+own lock timing and is green in isolation and in the clean run.
+
+**Step 5 is still a separate, differently-authored gate**, and is not started: an independent formula
+oracle over the committed stream, the full bump matrix/source/luminance/format coverage, CPU/Vulkan
+pixel agreement where the perturbed texel is visible in the readback, and old-red/final-green. Signed
+(snorm) bump inputs, cube/volume bump stages and rect-texture remap remain open, and modes 8..31 and
+stage-3 cube still fall back. No in-game bump correction is claimed: the smokes say nothing about the
+title's own bump state. This repair admission consumed one carried normal slot and the single granted
+repair allowance (the grant is the owner's repair-packet instruction for this operation, not a renewal
+asserted here), so the D4 allowance is now **one normal operation and zero repair cycles**, with no
+slot refunded or added. No D4 or D completion.
 
 ## Objective
 
