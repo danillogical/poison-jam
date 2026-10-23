@@ -943,6 +943,64 @@ if(BUILD_TESTING)
         endif()
         endif()
 
+        # ── BUMPENVMAP q-independence, the focused D4 step-4 gate ────────────────────────────
+        # Authored by a worker distinct from the production change. Modes 6/7 must sample
+        # pT.xy + dsdt with NO PROJECT2D texture-q division, while mode 1 must still divide.
+        # The CPU half #includes the production src/kernel/nv2a_pb_exec.c and asserts the real
+        # rc_stage_fetch (a DIRECT HELPER SEAM: no rasteriser, no committed stream). The
+        # Vulkan half #includes the production src/video/nv2a_vk_backend.c, drives vb_draw +
+        # vb_flip on the software ICD, and reads the perturbed texel back out of guest memory.
+        # It also carries the production binding witness: modes 4/5 must not upload or bind
+        # their stage texture, modes 1/2/3/6/7 must, witnessed from g.st.tex_uploads /
+        # g.st.tex_hits and the texture cache, per stage.
+        # The #included production files are NOT listed as sources (listing them would compile
+        # them twice), so MSBuild has no reason to recompile the test object when they change:
+        # its compiler include-tracking is unreliable and is disabled under %TEMP% (MSB8029).
+        # OBJECT_DEPENDS states the dependency the #include implies, so an edit to the file under
+        # test always rebuilds the object that includes it. The HLSL/SPIR-V the VK half consumes
+        # is already covered by add_dependencies(... xbox_video) below.
+        set_source_files_properties(tests/test_bumpenv_q_cpu.c PROPERTIES
+            OBJECT_DEPENDS "${XBOXRECOMP_DIR}/src/kernel/nv2a_pb_exec.c")
+        set_source_files_properties(tests/test_bumpenv_q_vk.c PROPERTIES
+            OBJECT_DEPENDS "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        add_executable(jsrf_bumpenv_q_cpu_test tests/test_bumpenv_q_cpu.c
+            ${XBOXRECOMP_DIR}/src/kernel/nv2a_vsh_interp.c
+            ${XBOXRECOMP_DIR}/src/kernel/nv2a_combiner.c)
+        target_include_directories(jsrf_bumpenv_q_cpu_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/kernel
+            ${XBOXRECOMP_DIR}/src/nv2a ${JSRF_GEN_INCLUDE_DIR})
+        target_link_libraries(jsrf_bumpenv_q_cpu_test PRIVATE ${CMAKE_DL_LIBS})
+        foreach(_case bump_zero_matrix bump_displacement bump_positive_delta bump_lum
+                project2d_control)
+            add_test(NAME jsrf_bumpenv_q_cpu_${_case}
+                     COMMAND jsrf_bumpenv_q_cpu_test --case ${_case})
+            set_tests_properties(jsrf_bumpenv_q_cpu_${_case} PROPERTIES TIMEOUT 120)
+        endforeach()
+        add_executable(jsrf_bumpenv_q_vk_test tests/test_bumpenv_q_vk.c)
+        add_dependencies(jsrf_bumpenv_q_vk_test xbox_video)
+        target_include_directories(jsrf_bumpenv_q_vk_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_bumpenv_q_vk_test PRIVATE ${CMAKE_DL_LIBS})
+        if(JSRF_VK_TEST_ICD)
+            file(TO_NATIVE_PATH "${JSRF_VK_TEST_ICD}" _vk_icd_bump)
+            set(_bump_vk_env
+                "VK_DRIVER_FILES=${_vk_icd_bump};VK_ICD_FILENAMES=${_vk_icd_bump};${JSRF_VK_TEST_SELECT};RECOMP_VK_PIPELINE_CACHE=off")
+            foreach(_case vk_bump_q vk_project2d_control vk_bind_witness)
+                add_test(NAME jsrf_bumpenv_q_vk_${_case}
+                         COMMAND jsrf_bumpenv_q_vk_test --case ${_case})
+                set_tests_properties(jsrf_bumpenv_q_vk_${_case} PROPERTIES TIMEOUT 300
+                    SKIP_RETURN_CODE 77 ENVIRONMENT "${_bump_vk_env}")
+            endforeach()
+        else()
+            foreach(_case vk_bump_q vk_project2d_control vk_bind_witness)
+                add_test(NAME jsrf_bumpenv_q_vk_${_case}
+                         COMMAND jsrf_bumpenv_q_vk_test --skip "XBR_VK_SW_ICD is not set")
+                set_tests_properties(jsrf_bumpenv_q_vk_${_case} PROPERTIES TIMEOUT 20
+                    SKIP_RETURN_CODE 77)
+            endforeach()
+        endif()
         # ── D4 Vulkan rc-refusal coverage, the real-device deciding gate ─────────────────────
         # Authored by a worker distinct from the production change. It #includes the production
         # src/video/nv2a_vk_backend.c with XBR_VK_BACKEND defined, installs on the software ICD,
