@@ -138,6 +138,19 @@ separate, differently-authored gate and is not started; the strict smoke was
 carried on verified identical runtime identity and says nothing about bump
 sampling.
 
+**Codex review of the fixture/tool repair (TR §31.79):** actual native CPU
+compilation and all ten focused CTests pass (10/10 in10.66s), and the original
+existing-root deletion is fixed. The candidate is still rejected: after the
+owned root is replaced, final release refuses cleanup but `force_rebuild` checks
+only lexical containment and deletes a replacement directory's sentinel. Codex
+reproduced this sequentially with disposable data; a private early ownership
+guard preserves it. Sole STOP `dec_0mvkd0r9590a81f646c06f28d` closes
+`op_0mvkao1vnf743041d9de6007a`. One further narrowly bounded cleanup-check repair
+is permitted by the skill's confirmed-review rule, renewing only one exhausted
+operation slot and one repair allowance; its admission yields cumulative D4
+**11 operations / 6 historical repair allowances, zero normal slots / zero repair
+cycles**. Full step 5 remains pending; its normal allowance is not renewed.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run

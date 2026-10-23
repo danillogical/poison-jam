@@ -7730,3 +7730,43 @@ here, as is the notion that its "not step 5" opening excluded a differently
 authored focused gate. No refund, reset or extension; the preflight 9/5 stays
 separate; every earlier run and sole decision is preserved; commits remain local
 and unpushed. Report: `logs/reports/d4-step4-fixture-safety-repair-2026-10-22.md`.
+
+### 31.79 — Codex confirms native fixture progress; forced rebuild bypasses current ownership
+
+Codex reviewed `op_0mvkao1vnf743041d9de6007a` / `run_0mvkakqvk5b481bf948a47013`:
+both origins fetched, clean game33c15cf (ahead9), toolkitd9153fd (ahead3), owner
+forks correct and toolkit upstream/nworkers pushes disabled. Codex independently
+reran all ten focused CTests,10/10 in10.66s, including actual WSL compilation and
+five CPU cases. The original existing-root/child/sentinel probe now exits2 and
+preserves the data. The full retained172/172570.38s/build/check logs were inspected,
+not rerun in full. Actual runtime exe/collector/XBE hashes match the carried strict
+smoke, whose scope remains bounded launch liveness with no bump batch or fidelity.
+
+The candidate is still rejected for a new deciding cleanup path in the repaired
+helper: final root release checks current marker/identity, but `force_rebuild`
+checks only whether `build_dir` resolves lexically under the original root path.
+Codex sequentially moved the owned root aside, created a replacement at that path
+with a foreign marker and disposable target-dir sentinel, and called both paths.
+`_still_owned()` was false and root release refused correctly; forced rebuild
+nevertheless recursively removed the replacement target directory and sentinel.
+A private helper copy adding an early current-ownership check refuses and preserves
+the sentinel. Shared helper bytes stayed unchanged. Only Codex-created probe data
+was involved; no real user directory or source was tested or removed. A separate
+junction probe was refused by Python's removal routine, so no foreign deletion is
+claimed for that case. The defect is sequential, not a race-freedom claim.
+
+Sole STOP `dec_0mvkd0r9590a81f646c06f28d`. Own assessment, concrete bounded repair,
+required final checks and stopping condition:
+`logs/reports/d4-step4-rebuild-ownership-codex-review-2026-10-22.md`; own actual
+helper probes and private prototype are linked there. Repair only the existing
+helper's current-ownership/exact-target checks and existing regression file; keep
+the verified native fixture and production rendering changes intact. Correct scope
+claims: the native gate manually compiles parsed sources and does not execute a
+non-Windows CMake graph; forced rebuild does recursively remove private target
+dirs, so its ownership proof must precede those removals too. No full step5 or push.
+
+Under the skill's NEW confirmed-review rule, renew only one exhausted operation
+slot plus one repair allowance for this bounded cleanup repair. Its admission
+consumes both: cumulative D4 **11operations/6historicalrepair allowances**, then
+**zero normal slots/zero repair cycles**. Fullstep5/later texgen normal allowances
+are not renewed. Preserve all earlier sole decisions and separate preflight9/5.
