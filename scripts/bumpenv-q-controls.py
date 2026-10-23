@@ -45,7 +45,9 @@ match. No pre-existing `toolkit-<control>/` or `build-<control>/` is ever
 removed: one that already exists is a harness bug (exit 3), never a path to
 delete. The forced-recompile cleanup does remove the focused targets
 recursively, but only after the same ownership proof and an exact per-target
-resolution check, and never by following a link. `--keep` leaves the owned root
+resolution check, and never by following a link. A failed stamp removes the
+fresh root only while its recorded directory identity still matches, and leaves
+a replaced one in place with a diagnostic. `--keep` leaves the owned root
 in place and prints its path.
 
 Exit status: 0 when every requested control was RED then GREEN as required,
@@ -169,14 +171,37 @@ class OwnedWorkArea:
         self.identity = None
 
     def stamp(self):
-        """Write the ownership marker and record the directory identity."""
+        """Record the directory identity, then write the ownership marker.
+
+        The identity is recorded FIRST: if the marker write is what fails, the
+        caller must still be able to tell whether the directory it is about to
+        remove is the one it just created.
+        """
+        st = self.path.stat()
+        self.identity = (st.st_dev, st.st_ino)
         (self.path / OWNERSHIP_MARKER).write_text(
             "bumpenv-q-controls owned work area\n"
             f"pid {os.getpid()}\n"
             f"token {self.token}\n",
             encoding="utf-8", newline="\n")
-        st = self.path.stat()
-        self.identity = (st.st_dev, st.st_ino)
+
+    def _same_directory(self):
+        """True only while the path is still the very directory created here.
+
+        Weaker than `_still_owned()` on purpose: it needs no ownership marker,
+        because the marker write is exactly what can fail. Used before removing
+        a root whose stamping failed.
+        """
+        try:
+            if self.path.is_symlink():
+                return False
+            if self.path.resolve() != self.resolved:
+                return False
+            st = self.path.stat()
+        except OSError:
+            return False
+        return (self.identity is not None
+                and (st.st_dev, st.st_ino) == self.identity)
 
     def contains(self, path):
         """True only for a path inside this owned root (resolved)."""
@@ -287,8 +312,13 @@ def acquire_work_area(args, game, toolkit):
     except OSError as exc:
         if args.keep:
             print(f"work area kept: {root}")
-        else:
+        elif owned._same_directory():
             shutil.rmtree(root, ignore_errors=True)
+        else:
+            # The root is no longer (or cannot be proven to still be) the
+            # directory created above, so it is not ours to remove.
+            print(f"work area NOT removed (ownership changed): {root}",
+                  file=sys.stderr)
         raise WorkAreaRefused(
             f"could not record ownership of {root}: {exc}") from exc
     return owned

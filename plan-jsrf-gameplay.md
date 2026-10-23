@@ -162,17 +162,22 @@ rather than followed and each target must resolve inside the valid owned root. A
 targets are planned and validated before any `rmtree`/`unlink`, a removal `OSError`
 becomes a `HarnessError` that keeps its path and message, and a genuinely owned fresh
 root still gets the same recursive `*.dir` removals, exe/SPIR-V unlinks and identical
-printout. The sequential invariant is stated, not race freedom. The existing
-ownership module now has fifteen cases: the replaced-root/foreign-marker/sentinel,
-missing-proof and redirected-junction cases fail against the pre-repair helper on
-outcome (the replacement's sentinel, exe and `.dir` were all gone) and pass now,
-the junction case is not skipped on this host, and the eleven earlier cases and a
-normal fresh-owned control are retained. Windows: focused 10/10 in 11.16 s with the
-real llvmpipe device and WSL compile/link witnesses, both private controls RED on
-named assertions then GREEN from their own fresh owned roots with distinct
-baseline/mutated/restored hashes and byte-identical shared toolkit hashes, guarded
-build 59 targets / 172 tests, full limited CTest **172/172 in 531.64 s** on the
-final tree (564.95 s on the same source before the last prose edit), `just check`
+printout. The same invariant now holds in the other removal path: `stamp()` records
+the directory identity before writing the marker, and a failed stamp removes the
+fresh root only while that identity still matches — a replaced root is left in
+place with a diagnostic, and a still-owned one is still removed rather than leaked.
+The sequential invariant is stated, not race freedom. The existing ownership module
+now has seventeen cases: the replaced-root/foreign-marker/sentinel, missing-proof,
+redirected-junction and stamp-failure-with-replaced-identity cases fail against the
+pre-repair helper on outcome (the replacement's sentinel, exe and `.dir` were gone)
+and pass now, the junction case is not skipped on this host, and the eleven earlier
+cases plus two labelled no-leak/no-regression controls are retained. Windows:
+focused 10/10 in 11.02 s with the real llvmpipe device and WSL compile/link
+witnesses, both private controls RED on named assertions then GREEN from their own
+fresh owned roots with distinct baseline/mutated/restored hashes and byte-identical
+shared toolkit hashes, guarded build 59 targets / 172 tests, full limited CTest
+**172/172 in 529.14 s** on the exact final tree (530.38 s, 531.64 s and 564.95 s on
+earlier revisions of the same source), `just check`
 green with `entries=126 recompiled_and_matched=126`. The strict smoke is carried on
 matching runtime identity (`jsrf_recomp.exe ca550e78…`, `jsrf_collect.exe cb90b7e3…`,
 `game/default.xbe fd190557…`); it says nothing about bump sampling. The portability

@@ -7811,22 +7811,37 @@ cleanup removes private `*.dir` trees recursively and calls this a sequential
 invariant, not race freedom. The module's ownership paragraph no longer claims
 nothing inside the root is ever removed.
 
+**The same invariant in the other removal path.** Reviewing the helper's exception
+paths for the same rule found `acquire_work_area`'s stamp-failure handler doing an
+unconditional `rmtree(root, ignore_errors=True)`, with no proof that `root` was
+still the directory it had just created. `stamp()` now records the identity before
+it writes the marker (so a failed marker write still leaves a usable proof), a new
+`_same_directory()` checks link/resolved-path/identity without requiring the marker,
+and the failure path removes the root only while that holds; otherwise it prints
+`work area NOT removed (ownership changed)` and leaves it. `--keep` and the raised
+`WorkAreaRefused` message are unchanged, so a fix that simply stopped removing
+cannot silently leak scratch roots either.
+
 **Regression, and that it decides the defect.** The existing
-`tests/test_bumpenv_controls_workdir.py` gained four cases and three helpers; the
+`tests/test_bumpenv_controls_workdir.py` gained six cases and five helpers; the
 eleven earlier cases are unchanged. Against the pre-repair helper it is
-`Ran 15 tests … FAILED (failures=3)`: the replaced-root case reports `None` rather
+`Ran 17 tests … FAILED (failures=4)`: the replaced-root case reports `None` rather
 than a `HarnessError` with the replacement's sentinel, exe and `.dir` all absent
 (`(False, False, False)`); the missing-proof case the same; the junction case
 raises a bare `OSError('Cannot call rmtree on a symbolic link')` from Python's own
-removal routine rather than the named refusal. The fourth case is the
-no-regression control and passes on both. On the repaired helper it is
-`Ran 15 tests … OK` with no skips — the junction case really creates a `mklink /J`
-here — and the primary's probe now reports
-`{"refused": true, "still_owned": false, "sentinel_survives": true,
+removal routine rather than the named refusal; and the stamp-failure case fails on
+outcome too — the assertion text is "a replacement directory at the same pathname
+must not be removed" — because the pristine unconditional `rmtree` deleted the
+replacement. Two of the new cases are controls that pass on both helpers and are
+labelled as such: the normal fresh-owned `force_rebuild` case, and the
+stamp-failure-with-intact-identity case (a fix that stopped removing would leak
+scratch roots). On the repaired helper it is `Ran 17 tests … OK` with no skips —
+the junction case really creates a `mklink /J` here — and the primary's probe
+reports `{"refused": true, "still_owned": false, "sentinel_survives": true,
 "dir_survives": true, "exe_survives": true}` with the refusal naming
 `ownership proof failed for the work area …`.
 
-**Receipts on the settled tree.** Focused Windows 10/10 in 11.16 s on the pinned
+**Receipts on the settled tree.** Focused Windows 10/10 in 11.02 s on the pinned
 software ICD with device `llvmpipe (LLVM 23.1.2, 256 bits) (type 4, api 1.4.354)`,
 including the WSL compile/link/run of the five CPU cases; the `vk_bump_q` verbose
 run shows `readbacks=1 rb_copies=1 validation_errors=0`. Both private controls ran
@@ -7837,14 +7852,14 @@ Vulkan texel assertions, with `project2d_control` GREEN under the mutation; then
 all six GREEN after restore. `bind-guard` RED on `mode 4 must not upload its stage
 texture` and `mode 5 must not upload its stage texture`, then GREEN on
 `vk_bind_witness`. Baseline/mutated/restored executable hashes differ in both
-runs (`2baffb0c…`/`38bd2d77…`/`59530e2a…` CPU and
-`6fd245f8…`/`b07d32df…`/`20da1806…` VK for `q-divide`; `be43e724…`/`2ff23d66…`/
-`cb7eb065…` and `a5f50c42…`/`c41033fb…`/`ab443721…` for `bind-guard`), so neither
+runs (`a41a992c…`/`edee2f45…`/`8c0f1357…` CPU and
+`ddb6d796…`/`f28b558a…`/`77675552…` VK for `q-divide`; `66796a3a…`/`d97681f6…`/
+`6feb62f6…` and `9fff4334…`/`e164179a…`/`ba2e8943…` for `bind-guard`), so neither
 verdict can be a stale binary, and the forced rebuild printed the recursive
 `*.dir/` removals before every build. Guarded build exit 0, 59 targets / **172**
-tests derived, corpus 128/126 unchanged. Full limited CTest **172/172 in 531.64 s**,
-exit 0, re-run after the last prose edit; the earlier run on the same source was
-172/172 in 564.95 s. `just check` green including `entries=126 recompiled_and_matched=126
+tests derived, corpus 128/126 unchanged. Full limited CTest **172/172 in 529.14 s**,
+exit 0, on the exact final tree; earlier runs of the same source were 172/172 in
+530.38 s, 531.64 s and 564.95 s. `just check` green including `entries=126 recompiled_and_matched=126
 ascending=yes duplicates=0 xbe_distinct=126 problems=0`.
 
 **Scope claims corrected.** `tests/test_bumpenv_fixture_portability.py` now states

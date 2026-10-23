@@ -558,6 +558,101 @@ class WorkdirOwnershipTest(unittest.TestCase):
             self.assertEqual(sibling_sentinel.read_text(encoding="utf-8"),
                              "not mine\n")
 
+    # ── acquire_work_area: a failed stamp must not remove a foreign root ────
+    #
+    # stamp() records the identity before it writes the marker, so a marker
+    # write that fails still leaves a usable proof. The failure path must use
+    # it instead of an unconditional rmtree.
+
+    @staticmethod
+    def failing_stamp(on_fail=None):
+        """A stamp() that records the real identity, then fails."""
+        def stamp(self):
+            st = self.path.stat()
+            self.identity = (st.st_dev, st.st_ino)
+            if on_fail is not None:
+                on_fail(self)
+            raise OSError("stamp failed")
+
+        return stamp
+
+    def acquire_refused(self, module, work):
+        """Call acquire_work_area; return (exception, stderr text)."""
+        args = types.SimpleNamespace(workdir=str(work), keep=False)
+        err = io.StringIO()
+        raised = None
+        with contextlib.redirect_stderr(err):
+            try:
+                module.acquire_work_area(args, GAME, TOOLKIT)
+            except Exception as exc:  # the exception TYPE is the assertion
+                raised = exc
+        return raised, err.getvalue()
+
+    def test_stamp_failure_with_intact_identity_removes_the_fresh_root(self):
+        """A root this invocation created and still owns is not leaked."""
+        module = load_helper(HELPER)
+        self.assertTrue(hasattr(module, "OwnedWorkArea"),
+                        "the helper must expose the ownership API")
+        with scratch_root() as root:
+            work = root / "owned"
+            module.OwnedWorkArea.stamp = self.failing_stamp()
+
+            raised, err = self.acquire_refused(module, work)
+
+            self.assertIsInstance(
+                raised, module.WorkAreaRefused,
+                f"a failed stamp must be refused as a work-area error, not "
+                f"leak a scratch root; raised {raised!r}")
+            self.assertIn(str(work), str(raised),
+                          "the refusal must name the root")
+            self.assertIn("could not record ownership", str(raised))
+            self.assertFalse(work.exists(),
+                             "a still-owned fresh root must not be leaked")
+            self.assertNotIn("NOT removed", err,
+                             "an owned root is removed, not reported as kept")
+
+    def test_stamp_failure_with_replaced_identity_preserves_the_replacement(
+            self):
+        """The same defect class as force_rebuild: a replacement is not ours."""
+        module = load_helper(HELPER)
+        self.assertTrue(hasattr(module, "OwnedWorkArea"),
+                        "the helper must expose the ownership API")
+        with scratch_root() as root:
+            work = root / "owned"
+            moved = root / "moved-aside"
+            sentinel = root / "foreign-sentinel.txt"
+
+            def replace_then_fail(owned):
+                owned.path.rename(moved)
+                owned.path.mkdir()
+                sentinel.write_text("foreign data\n", encoding="utf-8")
+
+            module.OwnedWorkArea.stamp = self.failing_stamp(
+                replace_then_fail)
+
+            raised, err = self.acquire_refused(module, work)
+
+            survived = (work.is_dir(), sentinel.is_file(), moved.is_dir())
+            self.assertIsInstance(
+                raised, module.WorkAreaRefused,
+                f"a failed stamp must still be refused; raised {raised!r}; "
+                f"replacement/sentinel/moved present: {survived}")
+            self.assertIn(str(work), str(raised),
+                          "the refusal must name the root")
+            self.assertTrue(work.is_dir(),
+                            "a replacement directory at the same pathname must "
+                            "not be removed")
+            self.assertTrue(sentinel.is_file(),
+                            "the foreign sentinel must survive")
+            self.assertEqual(sentinel.read_text(encoding="utf-8"),
+                             "foreign data\n")
+            self.assertTrue(moved.is_dir(),
+                            "the moved-aside original must be untouched")
+            self.assertIn("NOT removed", err,
+                          "the diagnostic must say the root was left in place")
+            self.assertIn(str(work), err,
+                          "the diagnostic must name the root it left in place")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
