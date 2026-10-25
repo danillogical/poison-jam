@@ -238,6 +238,32 @@ class ProfileClassifierTests(unittest.TestCase):
                 self.assertTrue(any(name in reason for reason in result['reasons']),
                                 result['reasons'])
 
+    def test_v016_scheduling_and_cpu_switches_are_exploratory(self):
+        """v0.16.0 opt-ins that replace a model or answer with a different CPU."""
+        for name in ('RECOMP_DISPATCH_GATE', 'RECOMP_GUEST_LOCK', 'RECOMP_GUEST_CPUS',
+                     'RECOMP_FLIP_PACING', 'RECOMP_CPUID_NO_SIMD'):
+            for value in ('', '0', '1', 'all'):
+                with self.subTest(name=name, value=value):
+                    result = classify_settings(
+                        settings(RECOMP_GPU_ACK='0', **{name: value}))
+                    self.assertEqual(result['classification'], EXPLORATORY)
+                    self.assertTrue(any(name in reason for reason in result['reasons']),
+                                    result['reasons'])
+
+    def test_v016_capability_host_and_modifier_switches_stay_strict(self):
+        """Rendering/APU stages, host output, observation, and modifiers inert alone."""
+        for name in ('RECOMP_SWIZZLED_RT', 'RECOMP_CLIP_NEAR_Z', 'RECOMP_APU_HRTF',
+                     'RECOMP_D3D_PRESENT', 'RECOMP_PRESENT_FILTER', 'RECOMP_FULLSCREEN',
+                     'RECOMP_CLOSE_KEEPS_RUNNING', 'RECOMP_RUMBLE', 'RECOMP_STUB_LOG',
+                     'RECOMP_GUEST_CPU_TRACE', 'RECOMP_GUEST_QUANTUM',
+                     'RECOMP_IRQ_SAFE_POINTS', 'RECOMP_IRQ_SAFE_FORCE',
+                     'RECOMP_IRQ_SAFE_MS', 'RECOMP_DPC_ON_RAISE'):
+            for value in ('0', '1'):
+                with self.subTest(name=name, value=value):
+                    self.assertEqual(
+                        classify_settings(settings(RECOMP_GPU_ACK='0', **{name: value}))[
+                            'classification'], STRICT)
+
     def test_upstream_capability_switches_stay_strict(self):
         """Real capability or observation, not a faked answer."""
         for name in ('RECOMP_ASYNC_IO', 'RECOMP_USB_HC', 'RECOMP_USB_NDP',

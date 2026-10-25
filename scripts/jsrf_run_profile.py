@@ -460,6 +460,17 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         # rejects, so a run with it set is measuring the cap, not the title.
         # The 1024-packet default stays a STOP (ledger L40).
         (NV2A_PACKET_CAP, 'changes the submission walk packet cap away from its 1024 default when present (diagnostic; ledger L40)'),
+        # Upstream v0.16.0 opt-ins (toolkit merge db4f44f), all off by default. The gate
+        # and the lock replace the interrupt/DPC and guest scheduling models, as
+        # GUEST_SERIAL does; one-core pinning changes how guest threads interleave; flip
+        # pacing is an unadmitted flip hold; the CPUID switch answers with a CPU the
+        # console never had. Their modifiers (IRQ_SAFE_*, DPC_ON_RAISE, GUEST_QUANTUM)
+        # act only under these, so they are not listed here.
+        ('RECOMP_DISPATCH_GATE', 'replaces interrupt and DPC delivery with the one-CPU DISPATCH gate when present'),
+        ('RECOMP_GUEST_LOCK', 'runs one guest thread at a time with quantum preemption when present'),
+        ('RECOMP_GUEST_CPUS', 'pins every guest thread to one host core when present'),
+        ('RECOMP_FLIP_PACING', 'holds flips on the guest vblank clock (an unadmitted flip hold) when present'),
+        ('RECOMP_CPUID_NO_SIMD', 'answers CPUID without MMX, FXSR and SSE, unlike the console CPU, when present'),
     ):
         if name.casefold() in values:
             active.append(f'{name} {reason}')
