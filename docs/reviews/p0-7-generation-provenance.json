@@ -4,14 +4,14 @@
  "generated_outputs": {
   "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "1e86b3a293f803b556866850863be047a847db2dc521c402e4d6b0b66dc6eed7",
   "src/recomp/gen/recomp_0000.c": "e116c1917dab63c6d5400ad3e647ff991be7bf1d2aa9d18d696a85e56ab14223",
-  "src/recomp/gen/recomp_0001.c": "47ea7aecf8e2318d1f9b8a93c3e4da09fc5d25030ebac20810f73645dc515fb5",
-  "src/recomp/gen/recomp_0002.c": "adbf09fa597ec7802d645fa1d7e0644ef91ecbb4ab3ab1dde306453fccda6c31",
-  "src/recomp/gen/recomp_0003.c": "422439f8c4e683d29bfa6a17bb670ff023cf6dda3190e7e3b8f08b130e4f1571",
-  "src/recomp/gen/recomp_0004.c": "18354af1dab2a942fc28125faf245f12a8e44b004dfa2fab0dab3f616dd565f3",
-  "src/recomp/gen/recomp_0005.c": "4ea711a0ee60787d54dadd5880028ef189befc618aa73e06a3e13695b38d51f0",
-  "src/recomp/gen/recomp_abi_deltas.c": "92e4ea9a9ac2819ec1b51bc113c4412af474154058185606cd64be1a896ea600",
-  "src/recomp/gen/recomp_dispatch.c": "641b4055574f8693677c536b491bc77d26476e39e92c52e8a8d504ab8c672770",
-  "src/recomp/gen/recomp_funcs.h": "bbc1531ee4a0592fe617859f91ee38ee83685df443ec660fc8df0b7591ed499e",
+  "src/recomp/gen/recomp_0001.c": "7bb8cda4b1009f7ad2364b34284d63cfa640ec640e34f2c4414c363db2c99fa0",
+  "src/recomp/gen/recomp_0002.c": "0bb61bb49bafc2eace8de9d6ec8bd2b0a4361d8ad58f8b5a3608024eeef7321a",
+  "src/recomp/gen/recomp_0003.c": "a38d459a8e5224fc617be75268db98cf56d0b90cbc6d97859dbe6e9f2ac6926e",
+  "src/recomp/gen/recomp_0004.c": "e9153552f66769a0361fc359ed76f3bd8275b08036c021cc818b8e1c909b4c67",
+  "src/recomp/gen/recomp_0005.c": "640d1f48e02a721cb6cedcd5a30cb25b5aef0dc6522d9236f54f198e5d70c623",
+  "src/recomp/gen/recomp_abi_deltas.c": "7539102510eaec0245d4a2f2ce79a9030739795b0705964f5e1b21ab8762b435",
+  "src/recomp/gen/recomp_dispatch.c": "4fce108430be97e980c52505e1ed09a0e275b32b2376f1df6a2cf3932ed50cff",
+  "src/recomp/gen/recomp_funcs.h": "6716815d1986d3b896c7efd13b64946b752e47e681f85f69dd3d99d176c55ab5",
   "src/recomp/gen/recomp_stubs_recovery.c": "6cbb4fafaed291d4b1854e7cd3926b8fc1ff46e17abde4bf77a30d536bddd5c1",
   "src/recomp/gen/recomp_types.h": "edc184333db517bfd74a752b4d177828659db62e72f34811daff86cc1ef3b720",
   "src/recomp/gen/shaders/nv2a_vsh_programs.c": "c71e02ec118a05a3c548cd1514fe52e3b194ec3d4b915032ac21b445ae8b54d4",
@@ -23,21 +23,21 @@
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
-   "dirty": true,
-   "revision": "4d8a7c3fcd480a9368afb31a469752458133c8d6",
+   "dirty": false,
+   "revision": "772b33a580c9aecf21ac92b0c899e8de162b3574",
    "state": "MEASURED",
-   "status_sha256": "598ebce0d5db46f04304400cd890db920bafb67fd04a76f703b4e7a01618c3c2"
+   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "scripts/recover-functions.py": "4cab6b7325e42b62651f31a7948709b115f631eec5b13b2447dc9367600b40d5",
   "scripts/relift-selected.py": "09f3ba3f2e9c9e4f7ca9d388d690a13b8e9370bba7faa103518c21bdb8bc6590",
   "toolkit": {
    "dirty": false,
-   "revision": "db4f44fc4bd6a3f5aeb6f10fa570c4af6b19bab3",
+   "revision": "af78da4baad7453ca7341a1bb0fb69d4d08bc2bc",
    "state": "MEASURED",
    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "tools/recomp/lifter.py": "8e1427dc898a1889d70aa32e18e5d7dce2d8977d356b0e2eabff4887903ea52b",
-  "tools/recomp/translator.py": "f648374c8a291e2b47e140df2ad75b9fa3d63f5171fd509d24ef355d786d0c29"
+  "tools/recomp/translator.py": "3ed60043fb026f4910944976fdf893d978fd18494a7ced5d4c3ffc360b363525"
  },
  "inputs": {
   "config/boundary-fixes.json": {
@@ -1676,6 +1676,13 @@
     "config/recovery-unresolved.json"
    ],
    "cause": "Rebuild from nothing against the merged v0.16.0 toolkit after clearing every analysis output. Toolkit database 8,608 -> 9,310 functions, game database 8,089 -> 8,706; generated functions 5,922 -> 5,626, dispatch entries 9,078 -> 9,332 (alias wrappers 29 -> 432, 274 of them fatal late-owner aliases), recovery traps 71 -> 66, unresolved full-pass stubs 0, recovered/generated duplicates 0. The new database spans eight reviewed recoveries over the internal blocks their old ends stopped at, so those spans were widened; the two F800D/F8041 alias patches were retired because the pass no longer emits those aliases."
+  },
+  {
+   "command": "toolkit (xboxrecomp main af78da4): game: just regen; python -X utf8 scripts/relift-selected.py boundaries; python -X utf8 scripts/recover-functions.py; python -X utf8 scripts/gen-abi-deltas.py (analysis databases from the 2026-10-25 rebuild, disasm not rerun)",
+   "date": "2026-10-25",
+   "inputs_changed": [],
+   "generator_changed": "toolkit tools/recomp/translator.py (af78da4)",
+   "cause": "xboxrecomp af78da4: a late-owner tail_jump_alias that no real body covers and whose bytes end in a ret, jmp or trap keeps its own body instead of a fatal dispatch wrapper. v0.16.0 discovery had folded 124 previously translated functions into fatal wrappers (121 C++ unwind handlers at 0x186C60-0x18AC90, the frame-handler thunk 0x18708E, the CRT thread-notify routine 0x181009, and 0x1688F3). 123 are direct bodies again; 0x1688F3, an error return inside 0x1688B0 named by a .data table, stays fatal. Generated functions 5,626 -> 5,754; dispatch entries 9,332 unchanged; alias wrappers 432 -> 304 (fatal late-owner 274 -> 139, owner aliases 158 -> 165); recovery traps 66; recovered/generated duplicates 0."
   }
  ]
 }
