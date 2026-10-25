@@ -996,9 +996,14 @@ if(BUILD_TESTING)
             OBJECT_DEPENDS "${XBOXRECOMP_DIR}/src/kernel/nv2a_pb_exec.c")
         set_source_files_properties(tests/test_bumpenv_q_vk.c PROPERTIES
             OBJECT_DEPENDS "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        # The v0.16.0 executor also calls the flip hold, the host clock, and three runtime
+        # counters; the first two link for real, the counters come from a seam file.
         add_executable(jsrf_bumpenv_q_cpu_test tests/test_bumpenv_q_cpu.c
+            tests/bumpenv_q_cpu_seams.c
             ${XBOXRECOMP_DIR}/src/kernel/nv2a_vsh_interp.c
-            ${XBOXRECOMP_DIR}/src/kernel/nv2a_combiner.c)
+            ${XBOXRECOMP_DIR}/src/kernel/nv2a_combiner.c
+            ${XBOXRECOMP_DIR}/src/kernel/nv2a_flip_hold.c
+            ${XBOXRECOMP_DIR}/src/platform/host_time.c)
         target_include_directories(jsrf_bumpenv_q_cpu_test PRIVATE
             ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/kernel
             ${XBOXRECOMP_DIR}/src/nv2a ${JSRF_GEN_INCLUDE_DIR})

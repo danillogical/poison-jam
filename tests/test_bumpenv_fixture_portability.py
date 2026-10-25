@@ -246,6 +246,10 @@ class OffWindowsBuildTest(unittest.TestCase):
             resolved = src.replace("${XBOXRECOMP_DIR}", str(TOOLKIT))
             self.assertNotIn("${", resolved,
                              f"cannot resolve the CMake source {src!r} to a file")
+            # A plain relative source is the game's own file: CMake reads it
+            # relative to the source directory, so resolve it against GAME.
+            if "${" not in src and not pathlib.Path(resolved).is_absolute():
+                resolved = str(GAME / resolved)
             out.append(resolved)
         return out
 
