@@ -1,21 +1,21 @@
 {
  "files": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "f0006b2504a83beeb77338239ce887c9046c90baf17b5531a41cf75535ea4c13",
-  "src/recomp/gen/recomp_0000.c": "1dd06da387561cd7fc459b38c5d4d58f5b1ddf93dfcb42e99edf72d6c0183fb9",
-  "src/recomp/gen/recomp_0001.c": "9858fd14d6bef569e32c0ba03f90d7d4a0b77e13af31963370966f721155a4e6",
-  "src/recomp/gen/recomp_0002.c": "79267141ae6a52a9282749fb611022eea374caffdcaa7ed09dfc11d284a15c4c",
-  "src/recomp/gen/recomp_0003.c": "e91d81393eda225052c632f9f49384c86365f55aa087157610fade8087dabb3f",
-  "src/recomp/gen/recomp_0004.c": "cae1504f447e8c23b2004a68c9ca5612153791c0fd522ed6bcfceab0425050b1",
-  "src/recomp/gen/recomp_0005.c": "ed5b516c89df51bf445d0219f9b130a098f2921242576a9222bbac1679ce54df",
-  "src/recomp/gen/recomp_abi_deltas.c": "ff6e0748c926cf187d0766c124955f600896a3ebc3eca7f47e24e58c162a16cb",
-  "src/recomp/gen/recomp_dispatch.c": "65eeed2ef2ea475e87b7e4725814fc7c8d92129b74b3a2a7ba5544bb3a34ba4e",
-  "src/recomp/gen/recomp_funcs.h": "56aefdfd51edf084c1539615ac9314f65f92ce9f56d95ba7592f65ac8b07099c",
-  "src/recomp/gen/recomp_stubs_recovery.c": "85ba4e429a10b69dd167af61d6eebd67e91e33cdd6ac9071c1482240e93b02de",
-  "src/recomp/gen/recomp_types.h": "6d8bb9f4634df4b3e1e2c229e8e3f00c296f32772528037595b2c766c8e73d44",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "1e86b3a293f803b556866850863be047a847db2dc521c402e4d6b0b66dc6eed7",
+  "src/recomp/gen/recomp_0000.c": "e116c1917dab63c6d5400ad3e647ff991be7bf1d2aa9d18d696a85e56ab14223",
+  "src/recomp/gen/recomp_0001.c": "47ea7aecf8e2318d1f9b8a93c3e4da09fc5d25030ebac20810f73645dc515fb5",
+  "src/recomp/gen/recomp_0002.c": "adbf09fa597ec7802d645fa1d7e0644ef91ecbb4ab3ab1dde306453fccda6c31",
+  "src/recomp/gen/recomp_0003.c": "422439f8c4e683d29bfa6a17bb670ff023cf6dda3190e7e3b8f08b130e4f1571",
+  "src/recomp/gen/recomp_0004.c": "18354af1dab2a942fc28125faf245f12a8e44b004dfa2fab0dab3f616dd565f3",
+  "src/recomp/gen/recomp_0005.c": "4ea711a0ee60787d54dadd5880028ef189befc618aa73e06a3e13695b38d51f0",
+  "src/recomp/gen/recomp_abi_deltas.c": "92e4ea9a9ac2819ec1b51bc113c4412af474154058185606cd64be1a896ea600",
+  "src/recomp/gen/recomp_dispatch.c": "641b4055574f8693677c536b491bc77d26476e39e92c52e8a8d504ab8c672770",
+  "src/recomp/gen/recomp_funcs.h": "bbc1531ee4a0592fe617859f91ee38ee83685df443ec660fc8df0b7591ed499e",
+  "src/recomp/gen/recomp_stubs_recovery.c": "6cbb4fafaed291d4b1854e7cd3926b8fc1ff46e17abde4bf77a30d536bddd5c1",
+  "src/recomp/gen/recomp_types.h": "edc184333db517bfd74a752b4d177828659db62e72f34811daff86cc1ef3b720",
   "src/recomp/gen/shaders/nv2a_vsh_programs.c": "c71e02ec118a05a3c548cd1514fe52e3b194ec3d4b915032ac21b445ae8b54d4",
   "src/recomp/gen/shaders/nv2a_vsh_programs.h": "6ffdf27eb474bdc8a4e273803ab522eb9fdf4bc14556ee7b7a219a2dc13b1254",
-  "src/recomp/recovered/recovered.c": "3f7c8033b7667e9974a66c7ccf72d986115ac05fb58bc4cee1ea02f9cae2145b",
-  "src/recomp/recovered/recovered_11c1_test.c": "374c7e3ce1125d3546bcf10cc4b142d39c51f4b8cb3963ee31a4675759f2a921",
+  "src/recomp/recovered/recovered.c": "5e2b356985ddc8edaf7436852cba2bc413632bfb05f7250a7e1cac1df2970f58",
+  "src/recomp/recovered/recovered_11c1_test.c": "1986aac2eecbc93748c3677d9fea752e6bbd2179a14a4eb75fac20a7f14cc437",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -829,6 +829,26 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "Step 2b: xboxrecomp 7544264 traps untranslatable jumps and makes late-owner alias dispatch fatal; 0x6FE40/0xC42E0/0x11B680 recovered, 0x70027 retired, 0x11B660 tightened, 0x11BA00/0xD58E0 boundaries fixed"
+  },
+  {
+   "date": "2026-10-25",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_0000.c",
+    "src/recomp/gen/recomp_0001.c",
+    "src/recomp/gen/recomp_0002.c",
+    "src/recomp/gen/recomp_0003.c",
+    "src/recomp/gen/recomp_0004.c",
+    "src/recomp/gen/recomp_0005.c",
+    "src/recomp/gen/recomp_abi_deltas.c",
+    "src/recomp/gen/recomp_dispatch.c",
+    "src/recomp/gen/recomp_funcs.h",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/gen/recomp_types.h",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Full regeneration against xboxrecomp merge-v0.16.0 db4f44f (toolkit and game analysis rerun from nothing): 5,922 to 5,626 generated functions, 9,078 to 9,332 dispatch entries; F800D/F8041 alias patches retired; 0x5BAD0/0xC2730/0xD6190/0xE24B0/0xF1C30/0x162900/0x175170/0x1783D0 recovered spans widened over internal blocks"
   }
  ]
 }

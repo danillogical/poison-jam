@@ -2,42 +2,42 @@
  "checker_version": "jsrf-generation-provenance/1",
  "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield",
  "generated_outputs": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "f0006b2504a83beeb77338239ce887c9046c90baf17b5531a41cf75535ea4c13",
-  "src/recomp/gen/recomp_0000.c": "1dd06da387561cd7fc459b38c5d4d58f5b1ddf93dfcb42e99edf72d6c0183fb9",
-  "src/recomp/gen/recomp_0001.c": "9858fd14d6bef569e32c0ba03f90d7d4a0b77e13af31963370966f721155a4e6",
-  "src/recomp/gen/recomp_0002.c": "79267141ae6a52a9282749fb611022eea374caffdcaa7ed09dfc11d284a15c4c",
-  "src/recomp/gen/recomp_0003.c": "e91d81393eda225052c632f9f49384c86365f55aa087157610fade8087dabb3f",
-  "src/recomp/gen/recomp_0004.c": "cae1504f447e8c23b2004a68c9ca5612153791c0fd522ed6bcfceab0425050b1",
-  "src/recomp/gen/recomp_0005.c": "ed5b516c89df51bf445d0219f9b130a098f2921242576a9222bbac1679ce54df",
-  "src/recomp/gen/recomp_abi_deltas.c": "ff6e0748c926cf187d0766c124955f600896a3ebc3eca7f47e24e58c162a16cb",
-  "src/recomp/gen/recomp_dispatch.c": "65eeed2ef2ea475e87b7e4725814fc7c8d92129b74b3a2a7ba5544bb3a34ba4e",
-  "src/recomp/gen/recomp_funcs.h": "56aefdfd51edf084c1539615ac9314f65f92ce9f56d95ba7592f65ac8b07099c",
-  "src/recomp/gen/recomp_stubs_recovery.c": "85ba4e429a10b69dd167af61d6eebd67e91e33cdd6ac9071c1482240e93b02de",
-  "src/recomp/gen/recomp_types.h": "6d8bb9f4634df4b3e1e2c229e8e3f00c296f32772528037595b2c766c8e73d44",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "1e86b3a293f803b556866850863be047a847db2dc521c402e4d6b0b66dc6eed7",
+  "src/recomp/gen/recomp_0000.c": "e116c1917dab63c6d5400ad3e647ff991be7bf1d2aa9d18d696a85e56ab14223",
+  "src/recomp/gen/recomp_0001.c": "47ea7aecf8e2318d1f9b8a93c3e4da09fc5d25030ebac20810f73645dc515fb5",
+  "src/recomp/gen/recomp_0002.c": "adbf09fa597ec7802d645fa1d7e0644ef91ecbb4ab3ab1dde306453fccda6c31",
+  "src/recomp/gen/recomp_0003.c": "422439f8c4e683d29bfa6a17bb670ff023cf6dda3190e7e3b8f08b130e4f1571",
+  "src/recomp/gen/recomp_0004.c": "18354af1dab2a942fc28125faf245f12a8e44b004dfa2fab0dab3f616dd565f3",
+  "src/recomp/gen/recomp_0005.c": "4ea711a0ee60787d54dadd5880028ef189befc618aa73e06a3e13695b38d51f0",
+  "src/recomp/gen/recomp_abi_deltas.c": "92e4ea9a9ac2819ec1b51bc113c4412af474154058185606cd64be1a896ea600",
+  "src/recomp/gen/recomp_dispatch.c": "641b4055574f8693677c536b491bc77d26476e39e92c52e8a8d504ab8c672770",
+  "src/recomp/gen/recomp_funcs.h": "bbc1531ee4a0592fe617859f91ee38ee83685df443ec660fc8df0b7591ed499e",
+  "src/recomp/gen/recomp_stubs_recovery.c": "6cbb4fafaed291d4b1854e7cd3926b8fc1ff46e17abde4bf77a30d536bddd5c1",
+  "src/recomp/gen/recomp_types.h": "edc184333db517bfd74a752b4d177828659db62e72f34811daff86cc1ef3b720",
   "src/recomp/gen/shaders/nv2a_vsh_programs.c": "c71e02ec118a05a3c548cd1514fe52e3b194ec3d4b915032ac21b445ae8b54d4",
   "src/recomp/gen/shaders/nv2a_vsh_programs.h": "6ffdf27eb474bdc8a4e273803ab522eb9fdf4bc14556ee7b7a219a2dc13b1254",
-  "src/recomp/recovered/recovered.c": "3f7c8033b7667e9974a66c7ccf72d986115ac05fb58bc4cee1ea02f9cae2145b",
-  "src/recomp/recovered/recovered_11c1_test.c": "374c7e3ce1125d3546bcf10cc4b142d39c51f4b8cb3963ee31a4675759f2a921",
+  "src/recomp/recovered/recovered.c": "5e2b356985ddc8edaf7436852cba2bc413632bfb05f7250a7e1cac1df2970f58",
+  "src/recomp/recovered/recovered_11c1_test.c": "1986aac2eecbc93748c3677d9fea752e6bbd2179a14a4eb75fac20a7f14cc437",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
- "generation_mode": "Step-2b full regeneration 2026-10-20 with xboxrecomp 7544264 (jumps with no label in the emitting body and no symbol at the target become RECOMP_JUMP_TRAP at their site; an alias whose fold owner starts after it keeps no body and dispatches through a fatal wrapper): existing C3 toolkit and game analysis databases (disasm not rerun), full pass with --backedge-yield, generated-patches.json, boundary relifts (new 0x0011BA00 and 0x000D58E0 fixes), reviewed recovery seeds (0x0011B660 end tightened; 0x0006FE40, 0x000C42E0, 0x0011B680 recovered; false 0x00070027 retired) and ABI deltas, before the guarded build",
+ "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
-   "dirty": false,
-   "revision": "3638f8024c4fbc24c365f5a27d63049980c87de4",
+   "dirty": true,
+   "revision": "4d8a7c3fcd480a9368afb31a469752458133c8d6",
    "state": "MEASURED",
-   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   "status_sha256": "598ebce0d5db46f04304400cd890db920bafb67fd04a76f703b4e7a01618c3c2"
   },
   "scripts/recover-functions.py": "4cab6b7325e42b62651f31a7948709b115f631eec5b13b2447dc9367600b40d5",
   "scripts/relift-selected.py": "09f3ba3f2e9c9e4f7ca9d388d690a13b8e9370bba7faa103518c21bdb8bc6590",
   "toolkit": {
    "dirty": false,
-   "revision": "51fcb8563a384fbe69a8386a14e89f6f5666f030",
+   "revision": "db4f44fc4bd6a3f5aeb6f10fa570c4af6b19bab3",
    "state": "MEASURED",
    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "tools/recomp/lifter.py": "1acbcd19a383e3eb5dcf5939758cfbe270554682df09cfaad31c83211cb93f80",
-  "tools/recomp/translator.py": "270d181b24cf20863fb86a8e3263eccfe12c77c1d9a04a3030c5728f1d05dfad"
+  "tools/recomp/lifter.py": "8e1427dc898a1889d70aa32e18e5d7dce2d8977d356b0e2eabff4887903ea52b",
+  "tools/recomp/translator.py": "f648374c8a291e2b47e140df2ad75b9fa3d63f5171fd509d24ef355d786d0c29"
  },
  "inputs": {
   "config/boundary-fixes.json": {
@@ -51,14 +51,14 @@
    "sha256": "7164ae73e9fd145a5fd84e7b435ec2d5a3b946a0e7ef81bdeec199e32c6ad581"
   },
   "config/recovered-functions.json": {
-   "bytes": 3374442,
+   "bytes": 3378719,
    "present": true,
-   "sha256": "8f412c42f2bd7927df1b7897f475276b5978b87575eba64223a686ae24905f31"
+   "sha256": "ee0dbc8a98ee3dea12fe616161a16ec9f9080797829376a326af62143c10db3e"
   },
   "config/recovery-unresolved.json": {
-   "bytes": 2843,
+   "bytes": 2678,
    "present": true,
-   "sha256": "3cfae29ddcb19aaeb31424a15968a1750c5157c77a906d2bd638930cccd77a6b"
+   "sha256": "bc87cd7ca4eec5d9085cf87e07b8cdf2d65d43dd4dc9008a10e5217e7f0063d4"
   },
   "game/default.xbe": {
    "bytes": 2281472,
@@ -66,34 +66,34 @@
    "sha256": "fd19055756719893c466302809b433b785ecf5732df0441286f3f605f0f3ef9c"
   },
   "toolkit:tools/abi_analysis/output/abi_functions.json": {
-   "bytes": 2490306,
+   "bytes": 2691249,
    "present": true,
-   "sha256": "c496e7fa970b7d6938fb9ff85d2e5b210556a8c41f909b60c9b0b0ec7cdbdaae"
+   "sha256": "4badd53b10680d466386f4989dc82ecbf892c16aa7ee3e2f58dd79c9c1355ac2"
   },
   "toolkit:tools/disasm/output/functions.json": {
-   "bytes": 3486961,
+   "bytes": 3780180,
    "present": true,
-   "sha256": "8b58386b459ffc368c68c311e173522c0398b1556a64ab62a9490f3e56f791c7"
+   "sha256": "42f3e98620956fea0782ab59e2be9be27fe2566a421fc425f05fb2578dd23dd0"
   },
   "toolkit:tools/disasm/output/labels.json": {
-   "bytes": 1759738,
+   "bytes": 1860796,
    "present": true,
-   "sha256": "a1e9959642a9d7be952cbae429697aee45a6fb96b7f699a2d679feea9e404d6d"
+   "sha256": "dffb75e7740a308eae2e4549dd31a45513e8d19cd2d71f1883e8a8341d5c2a49"
   },
   "toolkit:tools/func_id/output/identified_functions.json": {
-   "bytes": 3157567,
+   "bytes": 3282964,
    "present": true,
-   "sha256": "7f647fac8ace07845dd6dbcd7534ab686f5bc9e157f4302245929154d659cf34"
+   "sha256": "a860f8bb855735fe239d33702e684b8ebda118c53af29b96066566f06ef2b782"
   },
   "tools/disasm/output/functions.json": {
-   "bytes": 3289004,
+   "bytes": 3544374,
    "present": true,
-   "sha256": "e0d4325b40a12259aef360e01f7cb19c3d1a08bbc7a964bc5c321b99670c9891"
+   "sha256": "20a60cb136c4b62bee350be457879cd0220ef4cbb1ec117eaf7641212df3eb82"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6254648,
+   "bytes": 6472006,
    "present": true,
-   "sha256": "ad4fce5fbe7ef9b5c019884bffc6eab1177d7d763718c6e243da2288260c6fdc"
+   "sha256": "f00727504dbe9792df5f58e9891e8e9022e21276d82581af5f34235f0dc21533"
   }
  },
  "known_unknowns": [],
@@ -161,18 +161,18 @@
    "src/recomp/recovered/recovered.c": {
     "markers": {
      "JSRF_ABI_CONTINUE": 10179,
-     "RECOMP_ABI_CALL": 12133,
+     "RECOMP_ABI_CALL": 12211,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 5927
+     "g_seh_ebp": 5919
     },
     "present": true
    }
   },
   "totals": {
    "JSRF_ABI_CONTINUE": 10179,
-   "RECOMP_ABI_CALL": 12144,
+   "RECOMP_ABI_CALL": 12222,
    "RECOMP_GENERATED_CODE": 4,
-   "g_seh_ebp": 5933
+   "g_seh_ebp": 5925
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
@@ -1661,6 +1661,21 @@
     "config/recovered-functions.json"
    ],
    "cause": "F6b: restored 0xB5EB0 to its real end 0x000B6732 and removed the false split entry 0x000B5F3A, which the runtime proved was an internal label."
+  },
+  {
+   "command": "toolkit (xboxrecomp main = merge-v0.16.0 db4f44f): python -m tools.disasm <xbe>; python -m tools.func_id <xbe>; python -m tools.abi_analysis <xbe>; game: python -m tools.disasm game\\default.xbe --text-only; just regen; python -X utf8 scripts/relift-selected.py boundaries; python -X utf8 scripts/recover-functions.py; python -X utf8 scripts/gen-abi-deltas.py",
+   "date": "2026-10-25",
+   "inputs_changed": [
+    "toolkit:tools/disasm/output/functions.json",
+    "toolkit:tools/disasm/output/labels.json",
+    "toolkit:tools/func_id/output/identified_functions.json",
+    "toolkit:tools/abi_analysis/output/abi_functions.json",
+    "tools/disasm/output/functions.json",
+    "tools/disasm/output/functions.recovered.json",
+    "config/recovered-functions.json",
+    "config/recovery-unresolved.json"
+   ],
+   "cause": "Rebuild from nothing against the merged v0.16.0 toolkit after clearing every analysis output. Toolkit database 8,608 -> 9,310 functions, game database 8,089 -> 8,706; generated functions 5,922 -> 5,626, dispatch entries 9,078 -> 9,332 (alias wrappers 29 -> 432, 274 of them fatal late-owner aliases), recovery traps 71 -> 66, unresolved full-pass stubs 0, recovered/generated duplicates 0. The new database spans eight reviewed recoveries over the internal blocks their old ends stopped at, so those spans were widened; the two F800D/F8041 alias patches were retired because the pass no longer emits those aliases."
   }
  ]
 }

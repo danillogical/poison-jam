@@ -80,7 +80,8 @@ import bisect
 # SHRUNK 2026-10-11 by 1 entry: 0x10A0E0, widened over its switch for stop 43 (config/stop-chain.json).
 # SHRUNK 2026-10-11 by 4 more: 0xAEE80, 0xD02D0, 0x110B20 and 0x11FE90, narrowed to their own exits by the table-scan batch.
 # SHRUNK 2026-10-12 by 1: 0x52050, end 0x52088 -> 0x5208C so its tail jmp and pop/ret exit are inside (stop 50, the pause-menu freeze).
-KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 2A000 4037C 44000 45DB0 73C20 A76E0 C7D40 E0710 E0CF0 EC0B0 F02F0 127810 142400 1783D0 180038""".split()}
+# SHRUNK 2026-10-25 by 1: 0x1783D0, end 0x1783F6 -> 0x178416 in the v0.16.0 regeneration, so its blocks at 0x1783F6 and 0x1783FE are inside.
+KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 2A000 4037C 44000 45DB0 73C20 A76E0 C7D40 E0710 E0CF0 EC0B0 F02F0 127810 142400 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):

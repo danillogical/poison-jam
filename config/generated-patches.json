@@ -105,22 +105,6 @@
    "ledger": "L02"
   },
   {
-   "id": "remove-f800d-f8041-alias-dispatch",
-   "file": "recomp_dispatch.c",
-   "before": "    { 0x000F800Du, (recomp_func_t)recomp_alias_000F800D },\n    { 0x000F8041u, (recomp_func_t)recomp_alias_000F8041 },\n",
-   "after": "    /* 0x000F800D and 0x000F8041 are interior labels of sub_000F7F00, not entries; their alias tuples are removed so they stay undispatchable. */\n",
-   "reason": "0x000F800D and 0x000F8041 are interior labels of the recovered sub_000F7F00 (config/recovered-functions.json, span 0x000F7F00..0x000F807C), not entries: 0x000F800D is the target of `je 0xf800d` at 0x000F7FE6 and 0x000F8041 of `je 0xf8041` at 0x000F7FDC and 0x000F802E, both continue with the ebx the 0x000F7F00 prologue set up, and both reach that function's `pop ebx; add esp, 0x70; ret 4` epilogue. The v0.14.0 function database (regeneration of 2026-10-18) lists them as tail_jump_alias entries, so the full pass emits alias wrappers that call sub_000F8000 -- itself an interior label pinned in config/manual-functions.json and defined nowhere -- and the link failed with LNK2019: unresolved external symbol sub_000F8000 referenced in function recomp_alias_000F800D. Same shape as `remove-f8000-dispatch`; the derived table size from `fix-dispatch-table-size` keeps the count right. recomp_dispatch.c is translation-owned, so this patch is the sanctioned mechanism. This patch removes the two dispatch tuples.",
-   "ledger": "L02"
-  },
-  {
-   "id": "remove-f800d-f8041-alias-wrappers",
-   "file": "recomp_dispatch.c",
-   "before": "static void recomp_alias_000F800D(void) { recomp_alias_observe(18u); sub_000F8000(); }\nstatic void recomp_alias_000F8041(void) { recomp_alias_observe(19u); sub_000F8000(); }\n",
-   "after": "/* 0x000F800D and 0x000F8041: alias wrappers removed with their dispatch tuples (interior labels of sub_000F7F00). */\n",
-   "reason": "0x000F800D and 0x000F8041 are interior labels of the recovered sub_000F7F00 (config/recovered-functions.json, span 0x000F7F00..0x000F807C), not entries: 0x000F800D is the target of `je 0xf800d` at 0x000F7FE6 and 0x000F8041 of `je 0xf8041` at 0x000F7FDC and 0x000F802E, both continue with the ebx the 0x000F7F00 prologue set up, and both reach that function's `pop ebx; add esp, 0x70; ret 4` epilogue. The v0.14.0 function database (regeneration of 2026-10-18) lists them as tail_jump_alias entries, so the full pass emits alias wrappers that call sub_000F8000 -- itself an interior label pinned in config/manual-functions.json and defined nowhere -- and the link failed with LNK2019: unresolved external symbol sub_000F8000 referenced in function recomp_alias_000F800D. Same shape as `remove-f8000-dispatch`; the derived table size from `fix-dispatch-table-size` keeps the count right. recomp_dispatch.c is translation-owned, so this patch is the sanctioned mechanism. This patch removes the two wrappers, which are the references to the undefined sub_000F8000; their observer slots 18 and 19 stay allocated and unused.",
-   "ledger": "L02"
-  },
-  {
    "id": "remove-100041-body-label-dispatch",
    "file": "recomp_dispatch.c",
    "before": "    { 0x00100041u, (recomp_func_t)recomp_alias_00100041 },\n",
