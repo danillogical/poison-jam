@@ -215,6 +215,15 @@ longer governs. Published 2026-10-23 on the owner's confirmation after audits, t
 `d9153fd` then game `87c6eb3` (receipts in TR §31.82). Next: step 6 (texgen/texture
 matrices), then step 7 (records and pushes), D5 and the optional owner-assisted step 8.
 
+**xboxrecomp v0.16.0 catch-up DONE locally (TR §31.83, 2026-10-25):** the toolkit fork merged
+upstream v0.15.0 and v0.16.0 (merge `0a1c8ae`, local `main` at `af78da4`), the game was rebuilt
+from nothing (game `7faecc2`, `8c28961`, `772b33a`, `c24945e`), and a late-owner alias
+regression the merge caused was fixed (123 of 124 functions restored; 0x1688F3 stays fatal,
+unreached, ledger L65). Strict smoke, Vulkan e2e and D3D11 e2e pass on the final tree
+(icall 0, fatal 0). The upstream guest-CPU lock and gate failed to reach the title, so serial
+mode (L34) stays and its retirement is deferred pending a gate diagnosis. Nothing is pushed yet.
+Next: audit and publish (toolkit first, then game), then D4 step 6.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run

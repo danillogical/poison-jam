@@ -8055,3 +8055,168 @@ step 8 remain.
 PUSHED_TO: origin / BRANCH: main / COMMIT: d9153fd55b89954ae9ce3fc567e377388c4266d6 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward b06bd36..d9153fd; D4 step-4 modes 6/7 implementation and its q/binding repair (2a3c1e9, 5e38bb4, d9153fd), 10 audited blobs, zero secrets; upstream and nworkers push URLs remain DISABLED.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 87c6eb3c16f75191bf08f89c46b0cc1c0d658672 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 3a3879f..87c6eb3; D4 step-4 records and gates, the step-5 gate f708c39 and its records, 54 audited blobs, zero secrets, no forbidden or oversized paths.
+
+### 31.83 — xboxrecomp v0.15.0 / v0.16.0 catch-up and regeneration (2026-10-24 to 2026-10-25)
+
+Records for a toolkit merge and the game regeneration that followed. Game commits `7faecc2`
+"build: link the v0.16.0 executor's flip hold and clock into the bump CPU fixture", `8c28961`
+"profiles: classify the v0.16.0 environment switches", `772b33a` "generation: rebuild from
+nothing against xboxrecomp v0.16.0" and `c24945e` "generation: regenerate with xboxrecomp
+af78da4 (late-owner routines keep a body)". Nothing is pushed: toolkit local `main` is
+`af78da4`, 110 commits ahead of origin, and the game is 4 ahead of origin (before this
+record). Publication receipts come later.
+
+**Upstream range.** The toolkit fork merged `sp00nznet/xboxrecomp` v0.15.0 "Second Reading"
+and v0.16.0 "Small Print" (`f0f8a46`). The merge base `eb0aa1d` is v0.14.0; the range is 104
+upstream commits against 226 of ours. The merge commit `0a1c8ae` is a true two-parent merge
+of `d9153fd` and `f0f8a46`, on branch `merge-v0.16.0`. Four follow-ups sit on it:
+- `15f2263`: cherry-pick of the nworkers `16a4a0d` (C4310 cast in `recomp_types.h`; author
+  Kitae Noh).
+- `5e53d3c`: the IRQL bracket for host-run ISRs and DPCs moved into bridge helpers so ledger
+  L11 holds. Side effect: OHCI's ISR runs at IRQL 16 by default, as upstream v0.14 did.
+- `7360953` and `db4f44f`: fork test-harness fits and `tests/FORK-STATUS.md`.
+- `af78da4`: the late-owner fix below.
+
+The laptop's local toolkit `main` was fast-forwarded to `af78da4`.
+
+**Policy.** The owner's rule for this merge: resolve conflicts toward upstream's design,
+because the fork merges upstream weekly. Where the fork's design was kept, an owner decision
+below says so.
+
+**Conflicts: 77 hunks in 22 files plus 6 modify/delete.**
+- `nv2a_pb_exec.c`: took upstream's clipper (clip space times w, plus a near plane), raster
+  queue, swizzle, border, arrayless attributes, fog/eye constants and flip hold. Kept the
+  fork's write guard, tiny-w screen-space path, back-end program batch, D4 bump and CONTROL0
+  cases and back-end flip.
+- `kernel_bridge.c`: rebuilt from the fork's version, with upstream's 6 commits ported by
+  hand.
+- Lifter and translator unified: `--backedge-yield` is now an alias of upstream's
+  `--back-edge-yield`, with one emitter. `RECOMP_BACK_EDGE` also calls `RECOMP_BACKEDGE()`,
+  so serial mode (L34) still yields. It yields on taken edges only.
+- APU: upstream's per-voice lock; HRTF stays off.
+- Rumble: upstream's.
+- The 6 modify/delete tests stay deleted (upstream designs the fork does not carry).
+
+**Owner decisions (2026-10-24).**
+- Keep the fork's model vblank (`RECOMP_VBLANK` stays retired), kmem arena (so
+  `RECOMP_CONTIG_AVOID_IMAGE` is unavailable) and APU IRQ path.
+- Keep APC deferral default-on with NT ordering (JSRF's ADX poller needs it); propose it to
+  upstream.
+- Keep the keyboard packet moving only on change.
+- Try upstream's guest-CPU lock and gate, and retire serial mode only if it works. Result: it
+  did not (see Runtime acceptance), so serial mode stays.
+
+**`tests/FORK-STATUS.md` classes** (toolkit). (b) upstream tests of designs not taken:
+`vblank_ack`, `kernel_io_apc`, `dpc_order`, `input_keyboard_map`. (c) mingw/POSIX-only by
+design. (d) pre-existing on main: `adpcm_decode` and `apu_mixdown` lack the qemu include
+directories.
+
+**Toolkit verification.** Windows toolkit CTest 24/24. pytest `tools/recomp tools/disasm`:
+942 passed, 2 skipped, plus 1 known negative control (`test_lifter_rep_compare_flags`),
+against 814 on the old main. Mac `posix_check` native PASS.
+
+**Regeneration.** The game was rebuilt from nothing against the merged toolkit (the rebuild
+order in `AGENTS.md`). Stage times: toolkit disasm 431.5 s, game disasm `--text-only`
+446.5 s, full pass about 220 s, recovery about 37 s.
+
+| | pre-merge | after merge | after fix |
+|---|---|---|---|
+| Generated functions | 5,922 | 5,626 | 5,754 |
+| Dispatch entries | 9,078 | 9,332 | 9,332 |
+| Direct | 9,049 | 8,900 | 9,028 |
+| Fatal late-owner aliases | 11 | 274 | 139 |
+| Owner-aliases | 18 | 158 | 165 |
+| Recovered functions | 3,393 | not rerun | 3,393 |
+| Recovery traps | 71 | not rerun | 66 |
+
+Recovered/generated duplicates 0; ABI deltas 4,834. `jsrf_recomp.exe` went from
+`ca550e78…` to `2378c2ed…` after the merge regeneration; the final post-fix executable is
+`de57958ca44d4377b5e41668a81d5fac87f9549605090b4c616b39faa61dc26b`
+(`logs/runs/20261025-162427-307-keyscript-v016-e2e-vk/metadata.json`, `exe_sha256`).
+- Config: 2 obsolete generated patches retired (the F800D and F8041 alias removals); 8
+  reviewed recovered spans widened to the new database's ends (0x5BAD0, 0xC2730, 0xD6190,
+  0xE24B0, 0xF1C30, 0x162900, 0x175170, 0x1783D0).
+- Run-profile classifier (`8c28961`): `RECOMP_DISPATCH_GATE`, `RECOMP_GUEST_LOCK`,
+  `RECOMP_GUEST_CPUS`, `RECOMP_FLIP_PACING` and `RECOMP_CPUID_NO_SIMD` are exploratory;
+  `RECOMP_SWIZZLED_RT`, `RECOMP_CLIP_NEAR_Z` and `RECOMP_APU_HRTF` are strict feature
+  switches; the host-only and observation switches are classified in the same commit.
+- Build: no new warnings (18 MSB8028, as before). `just check` green. Limited CTest 202/202,
+  including all 97 D4 gates.
+
+**The late-owner regression and its fix.**
+- *Observation.* After the merge regeneration 274 aliases were fatal late-owner aliases
+  (11 before), and 124 of them were previously translated, genuine functions.
+- *Cause.* Two upstream changes met the fork's own rule. Upstream disasm `7fc6f0d` (a
+  code-section pointer-table scan that read instruction operands as table entries before
+  function bodies were found) relabelled 0x181009 (the CRT thread-notify routine) and
+  0x18708E as `tail_jump_alias`. Upstream `14dc2f4` made each unwind handler's span end at the
+  following frame-handler thunk. The fork's abutting-fold rule (`ff4d442` and `7544264`,
+  §31.54) then gave those 124 functions fatal alias wrappers.
+- *Fix.* Toolkit `af78da4`: a late-owner alias that no real span covers and whose bytes end
+  in ret, jmp or trap keeps its own body (upstream's treatment); anything else stays fatal, so
+  the guarantee of `7544264` holds. Tests: `tools/recomp/test_tail_jump_to_alias_body.py`.
+- *Result.* 123 of the 124 are restored (fatal late-owner aliases 274 to 139). The remaining
+  one is 0x1688F3, an error-return block (`mov eax,0x800710D8; ret 0xC`) inside 0x1688B0,
+  named by a `.data` table word at 0x1F70DC. It stays fatal. It was not reached in any
+  acceptance run. It needs a reviewed recovery entry, or clipping in the translator, later
+  (ledger L65).
+- Most of the new owner-aliases (reported as 147 of 156; the table's 18 to 165 is the total
+  count, and the two figures were not reconciled here) sit inside their owner on an
+  instruction boundary and are named by coincidental words. An indirect call to one runs the
+  owner from its start and logs `[ALIAS-ICALL]` (the existing design).
+
+**Runtime acceptance (2026-10-25, all on the final tree).**
+- Strict smoke `20261025-162302-805-v016-strict-smoke`: `diagnostic_deadline` (bounded
+  capture only), checkpoints passed, save root verified, no fatal, ICALL, alias or stub lines.
+- Vulkan e2e `20261025-162427-307-keyscript-v016-e2e-vk` (exploratory, pipeline cache off):
+  `script_ok`, 72 steps, icall 0, fatal 0, last present at 617 s still changing. Frames were
+  viewed side by side with `20261020-141554-623-keyscript-c4-final-n3-e2e-vk` at main-menu,
+  intro-00 (Corn's Garage talk), intro-06, start, paused (pause map), resumed and
+  b-after-jump2. They look equivalent; differences are only in the attract background and
+  animation timing. This is a visual comparison, not a pixel diff.
+- D3D11 reference e2e `20261025-163601-570-keyscript-v016-e2e-d3d11`: `result.json` says
+  `script_ok: true`, outcome `keyscript_complete`, 620 s, `icall` 0, `fatal` 0, 60 timeline
+  frames, last present `[FBPRESENT] t=619s presents=12258 ... CHANGED`. The process was
+  killed at the deadline (exit code 1), as in the bounded runs.
+- **Gate experiment** `20261025-164643-156-keyscript-v016-e2e-vk-gate`
+  (`RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1`, Vulkan, cache off): FAIL. `result.json`:
+  `script_ok: false`, `wait_title` unsatisfied after 300 s, no timeline frame, no present,
+  `key_down` 0, outcome `keyscript_incomplete`. *Observation:* in `jsrf_run.log` one guest
+  thread (tid 34164, return addresses 0x193CFD and 0x193E62) calls kernel ordinal 119 and then
+  ordinal 145 repeatedly, at about 60 calls/s each, and about 35.8k kernel calls were logged
+  in total. The names come from the toolkit's `src/kernel/kernel_thunks.c`: 119 is
+  `KeInsertQueueDpc` and 145 is `KeSetEvent`. *Unverified hypothesis:* the gate expects IRQs
+  from upstream's bridge vblank, which the fork did not adopt. No diagnosis was made.
+  *Decision:* serial mode (L34) is kept; retiring it is deferred and needs a gate diagnosis
+  by a stronger model.
+
+**reJSRF triage.** reJSRF game v0.0.43 to v0.0.52: locale variants, a Linux app, the move to
+the shared `reexec/rexbox` runtime (MIT, HLE D3D8 and DSOUND), and xboxrecomp v0.15/v0.16
+pins. Nothing applies to the NV2A low-level path. The nworkers `rejsrf` toolkit branch is
+upstream v0.16.0 plus SSE2/perf commits (not ported) and `16a4a0d` (ported). rexbox v0.0.28
+(texgen and texture transforms) and its #67 (fixed-function lighting) are noted as MIT facts
+references for D4 step 6.
+
+**What this proves.** The merged toolkit regenerates and links the game; the title reaches the
+main menu, the intro and the pause map, and the scripted e2e completes on Vulkan and D3D11
+with icall 0 and fatal 0; the fix restores 123 of 124 functions that the merge had made fatal.
+
+**What it does not prove.** That 0x1688F3 is unreachable (no acceptance run reached it, and
+no coverage argument was made); that the new default-on upstream behaviours (ledger L66 to
+L72) are correct for JSRF beyond the viewed frames; why the gate fails; timing or
+frame-rate equivalence (none was measured).
+
+**Known follow-ups.**
+- About 24 game scripts hard-code the sibling `../xboxrecomp` path; one toolkit resolver is
+  planned.
+- The commit hook's `GIT_INDEX_FILE` leaks into `check-merge-structure.py` when a pathspec is
+  given to `git commit`; stage explicitly and commit with `-F`.
+- `tests/test_run_profiles.py` has 3 `RunnerPreflightTests` failing already at `4d8a7c3`
+  (not in CTest).
+- Divergences to send upstream or delete: APC deferral, the `recomp_icall_fail_log` stub
+  report, the 16-bit verbatim clear and the tiny-w path go to upstream; `RECOMP_BACKEDGE`,
+  `xbox_inb`/`xbox_outb`, `usb_gamepad_output` and `xbox_VblankAckHeld` are to be deleted
+  after the next regeneration.
+
+**State.** Catch-up DONE locally; nothing pushed. Next: audit and publish (toolkit first,
+then game), then D4 step 6.
