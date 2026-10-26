@@ -8056,7 +8056,7 @@ PUSHED_TO: origin / BRANCH: main / COMMIT: d9153fd55b89954ae9ce3fc567e377388c426
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 87c6eb3c16f75191bf08f89c46b0cc1c0d658672 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 3a3879f..87c6eb3; D4 step-4 records and gates, the step-5 gate f708c39 and its records, 54 audited blobs, zero secrets, no forbidden or oversized paths.
 
-### 31.83 — xboxrecomp v0.15.0 / v0.16.0 catch-up and regeneration (2026-10-24 to 2026-10-25)
+### §31.83 — xboxrecomp v0.15.0 / v0.16.0 catch-up and regeneration (2026-10-24 to 2026-10-25)
 
 Records for a toolkit merge and the game regeneration that followed. Game commits `7faecc2`
 "build: link the v0.16.0 executor's flip hold and clock into the bump CPU fixture", `8c28961`
@@ -8220,3 +8220,7 @@ frame-rate equivalence (none was measured).
 
 **State.** Catch-up DONE locally; nothing pushed. Next: audit and publish (toolkit first,
 then game), then D4 step 6.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: af78da4 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward d9153fd..af78da4 (110 commits: the v0.16.0 merge 0a1c8ae, 16a4a0d cherry-pick 15f2263, 5e53d3c, 7360953, db4f44f, the late-owner fix af78da4), toolkit pushed first on the owner's confirmation; 332 audited outgoing blobs (largest 445,814 bytes), 0 secret hits; upstream and nworkers push URLs remain DISABLED.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 6de6c51 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 4d8a7c3..6de6c51 (7faecc2, 8c28961, 772b33a, c24945e, 6de6c51: build fix, profile classification, regeneration config/provenance and this record); 19 audited outgoing blobs (largest 3,351,774 bytes), 0 secret hits, no game/, generated-code or corpus path.
