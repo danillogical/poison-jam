@@ -8360,3 +8360,7 @@ there).
 
 **State.** D4 steps 1–7 are DONE locally; nothing is pushed. The optional owner-assisted step 8 (an
 in-game boost/attract comparison against xemu) remains optional. Next: handoff preparation, then D5.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: cf185d0 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward af78da4..cf185d0 (1 commit: fixed-function texgen and texture matrices), toolkit pushed first on the owner's confirmation; 1 audited outgoing blob (297,308 bytes), 0 secret hits; upstream and nworkers push URLs remain DISABLED.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 0d34b46 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward a871e78..0d34b46 (18b1b4e step-6 gate, 2ce7c53 six private controls, 0d34b46 records and D4 close); 10 audited outgoing blobs (largest 649,516 bytes), 0 secret hits, only tests/scripts/CMake/docs, no game/, generated-code or corpus path.
