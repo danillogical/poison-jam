@@ -87,7 +87,9 @@ import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = Path(os.environ.get('XBOXRECOMP_DIR') or (ROOT.parent / 'xboxrecomp'))
+sys.path.insert(0, str(ROOT / 'scripts'))
+from toolkit_path import toolkit_path  # noqa: E402
+TOOLKIT = toolkit_path()
 VULKAN_SDK = Path(os.environ.get('VULKAN_SDK') or r'C:\VulkanSDK\1.4.357.0')
 
 SHARED_INPUTS = ('CMakeLists.txt', 'tests/test_optional_vulkan.py')

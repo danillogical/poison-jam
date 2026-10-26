@@ -30,10 +30,11 @@ from jsrf_run_profile import (
     resolve_requested_profile,
     validate_launch_profile,
 )
+from toolkit_path import toolkit_path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build' / 'Release'
-TOOLKIT = ROOT.parent / 'xboxrecomp'
+TOOLKIT = toolkit_path()
 PROBES = {
     '', 'healthy', 'worker-crash', 'deadlock', 'spin', 'handled', 'dispatch-race',
     'video', 'gpu-progress', 'gpu-stall', 'gpu-corrupt', 'gpu-unreadable',

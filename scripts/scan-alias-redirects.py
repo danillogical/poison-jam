@@ -29,8 +29,9 @@ import re
 import struct
 import sys
 
+from toolkit_path import toolkit_path
 root = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(root.parent / 'xboxrecomp'))
+sys.path.insert(0, str(toolkit_path()))
 import capstone
 
 dispatch = (root / 'src/recomp/gen/recomp_dispatch.c').read_text(encoding='utf-8')

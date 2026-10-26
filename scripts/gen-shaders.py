@@ -242,42 +242,30 @@ else:
     _prov_spec.loader.exec_module(prov)
 
 
-# The build tree whose CMakeCache names the toolkit CMake actually links: the
-# game's own build tree, at `build/`.  `resolve_toolkit` reads it there so the
-# guard, the generator and the `add_subdirectory` cannot drift onto different
-# checkouts (see the module docstring).
-CACHE_NAME = 'CMakeCache.txt'
-# One CMakeCache entry, tolerant of the `//`-comment lines CMake writes above each
-# entry, of surrounding whitespace, and of the entry's TYPE: a configure writes
-# `NAME:PATH=<value>` (or `:INTERNAL`, `:FILEPATH`, `:STRING`), and a configure that
-# fails early can leave a variable `:UNINITIALIZED` -- the VALUE is what matters
-# here, so any type is accepted.  The variable name is anchored and must be
-# followed by the type-or-`=` separator, so a DIFFERENT variable whose name merely
-# starts the same way (`XBOXRECOMP_DIRECTORY`) cannot match.
-_CACHE_ENTRY = r'^\s*{name}\s*(?::\s*[A-Za-z_][A-Za-z0-9_]*\s*)?=\s*(.*?)\s*$'
-CACHE_RE = re.compile(_CACHE_ENTRY.format(name='XBOXRECOMP_DIR'), re.MULTILINE)
-# The OWNED host-tool tree's own configure root: `cmake -S <toolkit> -B
-# build/vsh-tool` records that toolkit as `CMAKE_HOME_DIRECTORY`, and the tree's own
-# build system compiles THAT tree's sources from then on -- whichever toolkit this
-# repository later resolves (see `toolkit_binding_conflict`).
-HOME_DIR_RE = re.compile(_CACHE_ENTRY.format(name='CMAKE_HOME_DIRECTORY'), re.MULTILINE)
+# The cache parsing and the three-way toolkit resolution live in scripts/toolkit_path.py,
+# shared with every other script that needs the toolkit; one instance per process, like
+# the provenance module above.
+_TP_PATH = SCRIPTS / 'toolkit_path.py'
+if not _TP_PATH.is_file():
+    die(f'{_TP_PATH} is missing: it owns the toolkit resolution this generator applies.')
+_loaded_tp = sys.modules.get('toolkit_path')
+if _loaded_tp is not None and getattr(_loaded_tp, '__file__', None) \
+        and _same_file(_loaded_tp.__file__, _TP_PATH):
+    toolkit_path = _loaded_tp
+else:
+    _tp_spec = importlib.util.spec_from_file_location('toolkit_path', _TP_PATH)
+    toolkit_path = importlib.util.module_from_spec(_tp_spec)
+    sys.modules['toolkit_path'] = toolkit_path
+    _tp_spec.loader.exec_module(toolkit_path)
 
-
-def cache_entry(path, entry_re):
-    """One CMakeCache entry's value, or None when the cache or the entry is absent.
-
-    A missing cache, a missing entry and an empty value are all "this build tree has
-    not spoken": the caller decides whether that means "fall through to another
-    source" (`cached_toolkit`) or "not a problem on its own"
-    (`owned_tool_toolkit`).
-    """
-    path = Path(path)
-    if not path.is_file():
-        return None
-    match = entry_re.search(path.read_text(encoding='utf-8', errors='replace'))
-    if not match or not match.group(1).strip():
-        return None
-    return match.group(1).strip()
+# The game's own build tree is `GAME_BUILD_DIR`; `resolve_toolkit` reads its cache so the
+# guard, the generator and the `add_subdirectory` cannot drift onto different checkouts
+# (see the module docstring).
+CACHE_NAME = toolkit_path.CACHE_NAME
+CACHE_RE = toolkit_path.CACHE_RE
+# The OWNED host-tool tree's own configure root (see `toolkit_binding_conflict`).
+HOME_DIR_RE = toolkit_path.HOME_DIR_RE
+cache_entry = toolkit_path.cache_entry
 
 
 def cached_toolkit(build_dir=None):
@@ -355,39 +343,19 @@ def toolkit_binding_conflict(toolkit, tool_build_dir=None, label=None):
 def resolve_toolkit(build_dir=None):
     """The ONE toolkit root this repository binds to: `(path, label)`.
 
-    Three places name a toolkit: the build tree's cached `XBOXRECOMP_DIR` (what
-    CMake's `add_subdirectory` actually links and includes), `$XBOXRECOMP_DIR`,
-    and the sibling checkout.  When the cache and the environment disagree, the
-    generator and the guard would record and validate one tree's sources while the
-    game links the other's -- a mismatch no later check can see, because both
-    sides are internally consistent.  That case is therefore a REFUSAL naming both
-    paths, not a preference.
+    The three-way resolution (cached `XBOXRECOMP_DIR`, `$XBOXRECOMP_DIR`, sibling) and
+    the REFUSAL when the cache and the environment disagree live in
+    `scripts/toolkit_path.py`, shared with every other script; see its docstring.
 
-    Otherwise the cache wins (it is what the build links), then the environment,
-    then the sibling.  The winner must be a toolkit checkout -- `CMakeLists.txt`
-    and all three translator sources -- because a toolkit that is merely *named*
-    proves nothing about the code the corpus was built from.
+    On top of that, the winner must be a toolkit checkout -- `CMakeLists.txt` and all
+    three translator sources -- because a toolkit that is merely *named* proves nothing
+    about the code the corpus was built from.
     """
-    cached_raw = cached_toolkit(build_dir)
-    env_raw = os.environ.get('XBOXRECOMP_DIR')
-    if cached_raw is not None and env_raw and (
-            os.path.normcase(os.path.realpath(str(cached_raw)))
-            != os.path.normcase(os.path.realpath(str(env_raw)))):
-        raise prov.ProvenanceError(
-            f'the build tree caches XBOXRECOMP_DIR={cached_raw} but the environment sets '
-            f'XBOXRECOMP_DIR={env_raw}: CMake would link one toolkit while the shader '
-            f'generator and the corpus guard read the other, so the corpus could not be '
-            f'proven to describe the SPIR-V that gets linked. Configure with '
-            f'-DXBOXRECOMP_DIR=<the toolkit you want>, or unset XBOXRECOMP_DIR in the '
-            f'environment, so both name the same tree; if the corpus came from the other '
-            f'tree, re-run `just shaders` afterwards.')
-    if cached_raw is not None:
-        root, label = cached_raw, "the build tree's cached XBOXRECOMP_DIR"
-    elif env_raw:
-        root, label = Path(env_raw), 'XBOXRECOMP_DIR'
-    else:
-        root, label = ROOT.parent / 'xboxrecomp', 'the sibling checkout'
-    root = Path(os.path.realpath(str(root)))
+    try:
+        root, label = toolkit_path.toolkit_path(
+            build_dir or GAME_BUILD_DIR, game_root=ROOT, with_label=True)
+    except toolkit_path.ToolkitPathError as error:
+        raise prov.ProvenanceError(str(error)) from None
     missing = [p for p in [root / 'CMakeLists.txt', *prov.source_paths(root).values()]
                if not p.is_file()]
     if missing:

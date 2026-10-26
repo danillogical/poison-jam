@@ -5,8 +5,9 @@ import json
 import re
 import sys
 
+from toolkit_path import toolkit_path
 root=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(root.parent/'xboxrecomp'))
+sys.path.insert(0,str(toolkit_path()))
 from tools.recomp import config
 from tools.recomp.translator import FunctionTranslator, emitted_entries
 

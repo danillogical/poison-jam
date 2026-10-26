@@ -61,6 +61,9 @@ import sys
 import tempfile
 import time
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from toolkit_path import toolkit_path  # noqa: E402
+
 FROZEN_COMMIT = "2bcdc3081362341b92a9efb8afad00bdfd005c85"
 HERE = pathlib.Path(__file__).resolve().parent
 GAME = HERE.parent
@@ -598,7 +601,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--toolkit", type=pathlib.Path,
-                    default=pathlib.Path(os.environ.get("XBOXRECOMP_DIR", GAME.parent / "xboxrecomp")))
+                    default=toolkit_path())
     ap.add_argument("--expect-commit", default=FROZEN_COMMIT)
     ap.add_argument("--work", type=pathlib.Path, default=None,
                     help="private build area to create; it must not exist yet "

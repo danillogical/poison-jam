@@ -402,7 +402,10 @@ def load_snapshots(folder):
 
 def analyze(folder, toolkit=None):
     folder = Path(folder)
-    toolkit = Path(toolkit) if toolkit else Path(__file__).resolve().parents[2]/'xboxrecomp'
+    if toolkit: toolkit = Path(toolkit)
+    else:
+        from toolkit_path import toolkit_path
+        toolkit = toolkit_path()
     snapshots = load_snapshots(folder)
     if not snapshots: return dict(status='unavailable',warnings=['No frozen GPU snapshots in this archive.'])
     final = snapshots[-1]

@@ -59,8 +59,10 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from toolkit_path import toolkit_path
+
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = ROOT.parent / 'xboxrecomp'
+TOOLKIT = toolkit_path()
 CHECKER_VERSION = 'jsrf-merge-structure/1'
 
 # SCOPE: the toolkit paths that are build inputs of jsrf_recomp.exe.  Recorded as a

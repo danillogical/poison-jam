@@ -46,9 +46,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools' / 'ttd'))
+sys.path.insert(0, str(ROOT / 'scripts'))
 
 from aliases import aliases, host_base_from_log, ram_size_from_log  # noqa: E402
 from ttd_query_helpers import resolve_cdb  # noqa: E402
+from toolkit_path import toolkit_path  # noqa: E402
 
 JS = ROOT / 'tools' / 'ttd' / 'writes.js'
 THUNK_TABLE_BASE = 0x001C3F60
@@ -59,7 +61,7 @@ THUNK_TABLE_END = THUNK_TABLE_BASE + THUNK_TABLE_SLOTS * 4
 # S3 requires `mapped == expected == XBOX_NUM_MIRRORS`, because a toolkit change
 # would otherwise be reported as COMPLETE while missing views.  Read from the
 # toolkit header when it is reachable, so the two cannot drift silently.
-TOOLKIT_HEADER = ROOT.parent / 'xboxrecomp' / 'src' / 'kernel' / 'xbox_memory_layout.h'
+TOOLKIT_HEADER = toolkit_path() / 'src' / 'kernel' / 'xbox_memory_layout.h'
 
 EVENT_RE = re.compile(
     r'^TTDWRITE\|(\d+)\|(0x[0-9a-f]{16})\|(0x[0-9a-f]{16})\|(\d+)\|(\d+)\|(\d+)\|(\d+)\|([0-9a-f]+)$')

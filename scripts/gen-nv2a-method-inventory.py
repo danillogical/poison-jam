@@ -140,6 +140,7 @@ def _positive_int(name, text, base):
 # a failed `--help` is what tempted a caller into running the tool bare.
 sys.path.insert(0, str(root / "scripts"))
 from jsrf_dump import DumpMemory
+from toolkit_path import toolkit_path
 
 # Every run named on the command line contributes its methods, and the table is the
 # UNION of them. One ring is not enough: the table used to come from a single run
@@ -615,7 +616,7 @@ if "table-out" in opts and not opts["table-out"].strip():
                      "(an empty value would silently write the default target)")
 dest = Path(opts.get("table-out")
             or os.environ.get("JSRF_NV2A_TABLE_OUT")
-            or r"C:\Users\logic\Repos\xboxrecomp\src\nv2a\nv2a_method_table.c")
+            or str(toolkit_path() / "src" / "nv2a" / "nv2a_method_table.c"))
 # The inventory document normally sits beside the script's own repository. It is
 # overridable for the same reason the table path is: a caller (or a test) that
 # wants to exercise the generator without touching either repository must be able

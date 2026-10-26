@@ -33,8 +33,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from toolkit_path import toolkit_path
+
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = ROOT.parent / 'xboxrecomp'
+TOOLKIT = toolkit_path()
 SCRATCH = ROOT / 'logs' / 'analyze'
 CLANG_CL = shutil.which('clang-cl') or r'C:\Program Files\LLVM\bin\clang-cl.exe'
 

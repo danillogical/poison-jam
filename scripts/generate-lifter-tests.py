@@ -1,8 +1,9 @@
 """Generate executable instruction regressions from actual x86 bytes."""
 from pathlib import Path
 import sys
+from toolkit_path import toolkit_path
 root=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(root.parent/'xboxrecomp'))
+sys.path.insert(0,str(toolkit_path()))
 from tools.recomp.disasm import Disassembler, BasicBlock
 from tools.recomp.lifter import Lifter,lift_basic_block
 

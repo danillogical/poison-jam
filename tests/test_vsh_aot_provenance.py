@@ -86,7 +86,12 @@ CORPUS_DIR = Path(os.environ.get('JSRF_R1_CORPUS_DIR',
                                  str(ROOT / 'src' / 'recomp' / 'gen' / 'shaders')))
 CORPUS_C = CORPUS_DIR / 'nv2a_vsh_programs.c'
 CORPUS_H = CORPUS_DIR / 'nv2a_vsh_programs.h'
-TOOLKIT = Path(os.environ.get('XBOXRECOMP_DIR', str(ROOT.parent / 'xboxrecomp')))
+# The shared resolver is loaded from the SHIPPED scripts directory by path, so a mutant
+# `JSRF_R1_SCRIPTS` tree and `sys.path` stay untouched.
+_tp_spec = importlib.util.spec_from_file_location('toolkit_path', SCRIPTS / 'toolkit_path.py')
+_toolkit_path = importlib.util.module_from_spec(_tp_spec)
+_tp_spec.loader.exec_module(_toolkit_path)
+TOOLKIT = _toolkit_path.toolkit_path()
 VULKAN_SDK = Path(os.environ.get('VULKAN_SDK', r'C:\VulkanSDK\1.4.357.0'))
 DXC = VULKAN_SDK / 'Bin' / 'dxc.exe'
 XBE = ROOT / 'game' / 'default.xbe'
@@ -2833,9 +2838,9 @@ class WeakeningMutantTests(unittest.TestCase):
             'why': 'a stale corpus is compiled first and refused afterwards',
         },
         'M7 resolve_toolkit resolves the cache/environment conflict silently': {
-            'file': 'gen-shaders.py',
-            'subs': [('    if cached_raw is not None and env_raw and (\n',
-                      '    if False and cached_raw is not None and env_raw and (\n')],
+            'file': 'toolkit_path.py',
+            'subs': [('    if cached is not None and env_raw and not _same(cached, env_raw):\n',
+                      '    if False and cached is not None and env_raw and not _same(cached, env_raw):\n')],
             'tests': 'tests.test_vsh_aot_provenance.ToolkitBindingTests',
             'why': 'the guard reads one toolkit while CMake links another',
         },

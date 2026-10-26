@@ -8,6 +8,7 @@ import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from jsrf_dump import CaptureError, DumpMemory, dump_ranges
 import jsrf_gpu
+from toolkit_path import toolkit_path
 from jsrf_gpu import decode_queue
 # Resolved at call time so a missing name fails only the tests that use it.
 def load_method_table(*a,**k): return jsrf_gpu.load_method_table(*a,**k)
@@ -15,7 +16,7 @@ def missing_methods(*a,**k): return jsrf_gpu.missing_methods(*a,**k)
 def predicted_walk_diagnostic(*a,**k): return jsrf_gpu.predicted_walk_diagnostic(*a,**k)
 def analyze(*a,**k): return jsrf_gpu.analyze(*a,**k)
 
-REAL_TABLE=Path.home()/'src'/'xboxrecomp'/'src'/'nv2a'/'nv2a_method_table.c'
+REAL_TABLE=toolkit_path()/'src'/'nv2a'/'nv2a_method_table.c'
 SYNTHETIC_TABLE='''
 #define FOO_CLASS 0x11u
 #define BAR_CLASS 0x22u
@@ -186,7 +187,7 @@ class AnalyzeTests(unittest.TestCase):
     def test_default_toolkit_is_sibling(self):
         import inspect
         default=inspect.signature(jsrf_gpu.analyze).parameters['toolkit'].default
-        self.assertTrue(default is None or Path(default)==Path(jsrf_gpu.__file__).resolve().parents[2]/'xboxrecomp')
+        self.assertTrue(default is None or Path(default)==toolkit_path())
     def test_ring_end_normalised_to_start(self):
         with tempfile.TemporaryDirectory() as name:
             folder=Path(name); self.folder(folder,self.end-0x80000000,self.begin-0x80000000)

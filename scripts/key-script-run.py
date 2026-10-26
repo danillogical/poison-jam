@@ -103,10 +103,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from toolkit_path import toolkit_path
+
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build" / "Release"
 EXE = BUILD / "jsrf_recomp.exe"
-TOOLKIT = ROOT.parent / "xboxrecomp"
+TOOLKIT = toolkit_path()
 # Build outputs copied into the run directory; the collector is not used by this driver.
 KEY_ARTIFACTS = ("jsrf_recomp.exe", "jsrf_recomp.pdb", "jsrf_recomp.map", "build-source.json")
 

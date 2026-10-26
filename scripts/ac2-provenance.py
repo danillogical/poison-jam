@@ -56,8 +56,11 @@ def _path(env_name, default):
     return os.environ.get(env_name, default) if _TEST else default
 
 
-TOOLKIT_ROOT = _path('XBOXRECOMP_ROOT',
-                     os.path.join(os.path.dirname(ROOT), 'xboxrecomp'))
+if _TEST and 'XBOXRECOMP_ROOT' in os.environ:
+    TOOLKIT_ROOT = os.environ['XBOXRECOMP_ROOT']
+else:
+    from toolkit_path import toolkit_path
+    TOOLKIT_ROOT = str(toolkit_path())
 CAP_DIR = os.path.join(ROOT, 'logs', '_ac2_pre')
 
 MODEL_REL = 'src/kernel/xbox_memory_layout.c'

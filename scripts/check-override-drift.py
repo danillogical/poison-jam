@@ -51,10 +51,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = ROOT.parent / 'xboxrecomp'
 sys.path.insert(0, str(ROOT / 'scripts'))
 
+from toolkit_path import toolkit_path  # noqa: E402
 from jsrf_run_profile import RETIRED_OVERRIDES  # noqa: E402
+
+TOOLKIT = toolkit_path()
 
 CHECKER_VERSION = 'jsrf-override-drift/1'
 

@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / 'scripts'
 sys.path.insert(0, str(SCRIPTS))
+from toolkit_path import toolkit_path  # noqa: E402
 
 import jsrf_build  # noqa: E402
 
@@ -144,7 +145,7 @@ class PreflightTests(unittest.TestCase):
         bound pair -- path and the label that chose it -- so the one `toolkit :` line
         describes the tree every other step uses.
         """
-        bound = (ROOT.parent / 'xboxrecomp', 'the fixture toolkit')
+        bound = (toolkit_path(), 'the fixture toolkit')
         report = jsrf_build.preflight(4, toolkit=bound)
         self.assertEqual(report['toolkit'], str(bound[0]))
         self.assertEqual(report['toolkit_source'], 'the fixture toolkit')

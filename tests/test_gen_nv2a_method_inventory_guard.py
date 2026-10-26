@@ -47,7 +47,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "gen-nv2a-method-inventory.py"
-TOOLKIT_TABLE = Path(r"C:\Users\logic\Repos\xboxrecomp\src\nv2a\nv2a_method_table.c")
+sys.path.insert(0, str(ROOT / 'scripts'))
+from toolkit_path import toolkit_path  # noqa: E402
+TOOLKIT_TABLE = toolkit_path() / 'src' / 'nv2a' / 'nv2a_method_table.c'
 DOC = ROOT / "docs" / "jsrf-nv2a-method-inventory.md"
 
 # The three runs the committed table was generated from (TR section 22).
@@ -374,6 +376,7 @@ class ScratchTreeWitnessTests(unittest.TestCase):
         (tree / "config").mkdir()
         (tree / "logs" / "runs" / "r1").mkdir(parents=True)
         shutil.copy2(SCRIPT, tree / "scripts" / SCRIPT.name)
+        shutil.copy2(SCRIPT.parent / "toolkit_path.py", tree / "scripts" / "toolkit_path.py")
         (tree / "scripts" / "jsrf_dump.py").write_text(
             "import struct\n"
             "class DumpMemory:\n"

@@ -1283,6 +1283,8 @@ static char g_work[1024];
 
 static int resolve_tool(const char *from_argv)
 {
+    /* CMake always passes --tool; these paths only serve a manual run from the game root,
+     * because a C test cannot call scripts/toolkit_path.py (a stale entry fails file_exists). */
     static const char *const k_defaults[] = {
         "xboxrecomp/src/video/Release/nv2a_vsh_hlsl.exe",
         "build/xboxrecomp/src/video/Release/nv2a_vsh_hlsl.exe",

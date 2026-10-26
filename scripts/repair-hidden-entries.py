@@ -321,7 +321,8 @@ def verify(repairer, repaired, additions):
     if additions:
         try:
             import json as _json
-            sys.path.insert(0, str(ROOT.parent / 'xboxrecomp'))
+            from toolkit_path import toolkit_path
+            sys.path.insert(0, str(toolkit_path()))
             from tools.recomp import config as _config
             from tools.recomp.translator import FunctionTranslator
 

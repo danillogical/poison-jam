@@ -46,8 +46,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = ROOT.parent / 'xboxrecomp'
 sys.path.insert(0, str(ROOT / 'scripts'))
+
+from toolkit_path import toolkit_path  # noqa: E402
+
+TOOLKIT = toolkit_path()
 
 GATE_VERSION = 'jsrf-premise-gate/1'
 

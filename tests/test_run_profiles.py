@@ -40,7 +40,8 @@ from jsrf_run_profile import ARCHIVED_ARTIFACTS, REPOSITORY_FILES  # noqa: E402
 # The toolkit tree is a sibling of this repository; the revision-aware retired
 # layer needs it for git ancestry.  Skip those cases honestly rather than
 # asserting a PASS when the sibling is unavailable.
-TOOLKIT_ROOT = ROOT.parent / 'xboxrecomp'
+from toolkit_path import toolkit_path  # noqa: E402
+TOOLKIT_ROOT = toolkit_path()
 VBLANK = 'RECOMP_VBLANK'
 VBLANK_HONORING_REVISION = '18a0837b0f6de334342f00b64d0e999340e59ba9'   # pre-removal
 VBLANK_INERT_REVISION = '484887b88ff39f86d17c819375993340ebae972e'      # post-removal

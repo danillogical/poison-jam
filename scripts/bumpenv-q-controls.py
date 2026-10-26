@@ -85,8 +85,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from toolkit_path import toolkit_path
+
 GAME = Path(__file__).resolve().parent.parent
-TOOLKIT = (GAME / ".." / "xboxrecomp").resolve()
+TOOLKIT = toolkit_path()
 
 # The production files the controls mutate (the step-4 repair's three, plus the
 # shared refusal rule the refusal-gt8 control moves). Read-only here.
@@ -975,7 +978,7 @@ def main(argv=None):
                     help="private scratch directory to CREATE; it must not exist "
                          "yet (default: a fresh tmp-bumpenv-controls-<token> "
                          "sibling of the game checkout, outside both repos and "
-                         "outside %TEMP%)")
+                         "outside %%TEMP%%)")
     ap.add_argument("--keep", action="store_true",
                     help="keep the owned scratch directory and print its path")
     args = ap.parse_args(argv)

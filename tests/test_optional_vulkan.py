@@ -97,7 +97,9 @@ if GAME_CMAKE != SHIPPED_CMAKE or BUILD_SCRIPT != SHIPPED_BUILD_SCRIPT:
           f'scripts/build-jsrf.py <- {BUILD_SCRIPT}; the shipped files are '
           f'{SHIPPED_CMAKE} and {SHIPPED_BUILD_SCRIPT}')
 
-TOOLKIT = Path(os.environ.get('XBOXRECOMP_DIR') or (ROOT.parent / 'xboxrecomp'))
+sys.path.insert(0, str(ROOT / 'scripts'))
+from toolkit_path import toolkit_path  # noqa: E402
+TOOLKIT = toolkit_path()
 # The SDK root is had from the environment and otherwise from the documented install
 # location, like the R1 fixtures: a capability-ON configure must not depend on whose shell
 # started it (the guard's own `corpus_dxc` reads `$VULKAN_SDK` too, so it is passed down).

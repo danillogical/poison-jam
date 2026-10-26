@@ -36,7 +36,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = ROOT.parent / 'xboxrecomp'
+sys.path.insert(0, str(ROOT / 'scripts'))
+from toolkit_path import ToolkitPathError, toolkit_path  # noqa: E402
+
+try:
+    TOOLKIT = toolkit_path()
+except ToolkitPathError as error:
+    sys.exit(f'doctor: {error}')
 DOCTOR_VERSION = 'jsrf-doctor/1'
 
 # The same floor scripts/check-disk-gate.py defaults to; kept in one place there

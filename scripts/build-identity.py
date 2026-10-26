@@ -3,8 +3,9 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+from toolkit_path import toolkit_path
 root=Path(__file__).resolve().parents[1]
-toolkit=root.parent/'xboxrecomp'
+toolkit=toolkit_path()
 output=root/'build/Release'
 artifact_names=('jsrf_recomp.exe','jsrf_recomp.pdb','jsrf_recomp.map',
                 'jsrf_collect.exe','jsrf_collect.pdb','jsrf_gpu_smoke.exe','jsrf_gpu_smoke.pdb')

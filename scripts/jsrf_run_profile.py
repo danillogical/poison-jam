@@ -814,7 +814,8 @@ def reclassify_metadata(metadata: Any, archive_dir: Path | None = None,
     if not isinstance(metadata, dict):
         return {'classification': UNKNOWN, 'reasons': ['metadata root is not an object']}
     if toolkit_root is None:
-        toolkit_root = Path(__file__).resolve().parents[2] / 'xboxrecomp'
+        from toolkit_path import toolkit_path
+        toolkit_root = toolkit_path()
     if 'run_profile' in metadata:
         profile = metadata.get('run_profile')
         if not isinstance(profile, dict):

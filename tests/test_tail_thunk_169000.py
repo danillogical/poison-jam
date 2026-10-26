@@ -31,7 +31,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = ROOT.parent / "xboxrecomp"
+import sys
+sys.path.insert(0, str(ROOT / 'scripts'))
+from toolkit_path import toolkit_path  # noqa: E402
+TOOLKIT = toolkit_path()
 GEN_DIR = Path(os.environ.get("JSRF_GEN_DIR") or ROOT / "src/recomp/gen")
 THUNK = "sub_00169000"
 

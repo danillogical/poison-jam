@@ -36,7 +36,9 @@ import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
 GAME = HERE.parent
-TOOLKIT = (GAME / ".." / "xboxrecomp").resolve()
+sys.path.insert(0, str(GAME / 'scripts'))
+from toolkit_path import toolkit_path  # noqa: E402
+TOOLKIT = toolkit_path()
 CMAKE_LISTS = GAME / "CMakeLists.txt"
 
 TARGET = "jsrf_bumpenv_q_cpu_test"

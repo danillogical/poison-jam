@@ -29,8 +29,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from toolkit_path import toolkit_path
+
 ROOT = Path(__file__).resolve().parents[1]
-TOOLKIT = ROOT.parent / 'xboxrecomp'
+TOOLKIT = toolkit_path()
 MANIFEST_SCHEMA_VERSION = 1
 CHECKER_VERSION = 'jsrf-generation-provenance/1'
 
