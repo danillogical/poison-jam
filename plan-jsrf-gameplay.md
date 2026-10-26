@@ -224,6 +224,18 @@ unreached, ledger L65). Strict smoke, Vulkan e2e and D3D11 e2e pass on the final
 mode (L34) stays and its retirement is deferred pending a gate diagnosis. Nothing is pushed yet.
 Next: audit and publish (toolkit first, then game), then D4 step 6.
 
+**D4 step 6 and the D4 closing records DONE locally (TR §31.84, 2026-10-26):** toolkit `cf185d0`
+adds fixed-function texgen and texture matrices for stages 0-1 in one self-contained section of
+`nv2a_pb_exec.c`, and game `18b1b4e` and `2ce7c53` are the separate, differently-authored
+committed-stream gate (19 cases on the CPU executor and 19 on the Vulkan batch path, six private
+RED/GREEN controls). Old-red against the pre-step-6 toolkit was 17/19 CPU and 19/19 Vulkan; an
+independent oracle matched 8/8 literals; full limited CTest was 240/240 in 648.93 s with `just check`
+green; and an exploratory Vulkan e2e (`20261026-123133-068-keyscript-d4s6-e2e-vk`) completed with
+icall 0 and fatal 0 and showed no visible difference from the v0.16.0 run, with no fidelity claim. No
+production defect was found. Seven step-6 limitations (L75 to L81) and the two step-7 rows (L82, L83)
+are ledgered. D4 steps 1–7 are done; the optional owner-assisted step 8 (an in-game boost/attract
+comparison against xemu) stays optional. Nothing is pushed yet. Next: handoff preparation, then D5.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run
@@ -484,7 +496,7 @@ already approved steps:
    `982cd28`, `7c58ec6`, `6a38c01`, explaining any part already covered by upstream
    `34f5e1c`; retain attribution in commit bodies. Skip the performance-only ports.
 4. **D2 — DONE, no delta (TR §31.55):** regenerate and classify only D1's deltas, with C3 and C4 gates.
-5. **D3–D4:** triage reJSRF's game-side fixes against our LLE executor and Vulkan,
+5. **D3–D4 — DONE locally (TR §31.84):** triage reJSRF's game-side fixes against our LLE executor and Vulkan,
    then gather the required scene evidence on both backends and view the frames.
    **Coverage prerequisite (2026-10-21, TR §§31.56–31.57):** the first local
    instrumentation candidate was rejected: stage-1-only texgen/matrix use gave
@@ -511,9 +523,11 @@ already approved steps:
    conditional step-6 criterion is met but step 6 still waits for bump and its
    gate. BUMPENVMAP steps 4/5 are done locally (TR §§31.75–31.82): the modes 6/7
    implementation and its committed-stream CPU/Vulkan gate, with five limitations
-   ledgered; published (TR §31.82). Next is step 6 (texgen/texture matrices); in-game
-   confirmation waits for the optional owner-assisted step 8. No texgen implementation
-   is accepted yet.
+   ledgered; published (TR §31.82). Step 6 (texgen/texture matrices) and step 7 (records)
+   are done locally (TR §31.84): toolkit `cf185d0` with its separate committed-stream
+   gate, seven limitations ledgered (L75 to L81) and the two step-7 rows (L82, L83);
+   in-game confirmation waits for the optional owner-assisted step 8. Next: handoff
+   preparation, then D5.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when
    the preceding evidence establishes what is applicable.

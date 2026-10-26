@@ -7565,7 +7565,7 @@ the records commit that carries this section. They stay unpushed until step 5's 
 deciding gate and independent Codex acceptance; their absence from origin is intended, not a lost or
 failed push.
 
-### 31.77 — Codex confirms the production repair; rejects two new fixture/tool defects
+### §31.77 — Codex confirms the production repair; rejects two new fixture/tool defects
 
 Codex independently reviewed operation `op_0mvk3sc0ufb39663d99cd2f3a` under
 `run_0mvk3qrksee43402c8979f9fe`, fetched both origins and verified clean local
@@ -7625,7 +7625,7 @@ cycles. Full step5 remains a separate pending gate with no automatic normal-slot
 renewal. Preserve all earlier runs and their sole decisions; preflight accounting
 stays separate. Candidate commits remain local and unpushed.
 
-### 31.78 — The CPU bump fixture is genuinely portable, and the control harness owns only what it creates
+### §31.78 — The CPU bump fixture is genuinely portable, and the control harness owns only what it creates
 
 Bounded test-tool repair under run `run_0mvkakqvk5b481bf948a47013`, after Codex
 rejected the §31.77 candidate for two new defects. The R1/R2 production repair is
@@ -7731,7 +7731,7 @@ authored focused gate. No refund, reset or extension; the preflight 9/5 stays
 separate; every earlier run and sole decision is preserved; commits remain local
 and unpushed. Report: `logs/reports/d4-step4-fixture-safety-repair-2026-10-22.md`.
 
-### 31.79 — Codex confirms native fixture progress; forced rebuild bypasses current ownership
+### §31.79 — Codex confirms native fixture progress; forced rebuild bypasses current ownership
 
 Codex reviewed `op_0mvkao1vnf743041d9de6007a` / `run_0mvkakqvk5b481bf948a47013`:
 both origins fetched, clean game33c15cf (ahead9), toolkitd9153fd (ahead3), owner
@@ -7771,7 +7771,7 @@ consumes both: cumulative D4 **11operations/6historicalrepair allowances**, then
 **zero normal slots/zero repair cycles**. Fullstep5/later texgen normal allowances
 are not renewed. Preserve all earlier sole decisions and separate preflight9/5.
 
-### 31.80 — Forced cleanup now requires current ownership and exact targets
+### §31.80 — Forced cleanup now requires current ownership and exact targets
 
 Bounded test-tool repair under run `run_0mvkd2iugf018a7ecc0c8ff52`, closing the
 deciding path of §31.79. No production change: the R1/R2 rendering repair, the
@@ -7894,7 +7894,7 @@ new run; the preflight 9/5 stays separate; every earlier run and sole decision i
 preserved; the commits remain local and unpushed. Report:
 `logs/reports/d4-step4-rebuild-ownership-repair-2026-10-22.md`.
 
-### 31.81 — Codex independently accepts the bounded cleanup repair
+### §31.81 — Codex independently accepts the bounded cleanup repair
 
 Sole ACCEPT `dec_0mvkhiiu73f9b2c5a25ae3c9f` closes operation
 `op_0mvkd50m8ba933c7b3a87dd1a`, run `run_0mvkd2iugf018a7ecc0c8ff52`.
@@ -7938,7 +7938,7 @@ repair cycles; preflight9/5 remains separate. Successful acceptance renews no
 allowance. The next fullstep5 gate needs one newly authorized normal operation;
 do not silently start a new run or change human-owned model/provider/role settings.
 
-### 31.82 — D4 step 5: the committed-stream BUMPENVMAP gate (2026-10-23)
+### §31.82 — D4 step 5: the committed-stream BUMPENVMAP gate (2026-10-23)
 
 Game `f708c39` "tests: decide BUMPENVMAP modes 6/7 through the committed stream on CPU
 and Vulkan" is the separate, differently-authored step-5 gate that §31.75–31.81 left
@@ -8224,3 +8224,139 @@ then game), then D4 step 6.
 PUSHED_TO: origin / BRANCH: main / COMMIT: af78da4 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward d9153fd..af78da4 (110 commits: the v0.16.0 merge 0a1c8ae, 16a4a0d cherry-pick 15f2263, 5e53d3c, 7360953, db4f44f, the late-owner fix af78da4), toolkit pushed first on the owner's confirmation; 332 audited outgoing blobs (largest 445,814 bytes), 0 secret hits; upstream and nworkers push URLs remain DISABLED.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 6de6c51 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 4d8a7c3..6de6c51 (7faecc2, 8c28961, 772b33a, c24945e, 6de6c51: build fix, profile classification, regeneration config/provenance and this record); 19 audited outgoing blobs (largest 3,351,774 bytes), 0 secret hits, no game/, generated-code or corpus path.
+
+### §31.84 — D4 step 6: fixed-function texgen and texture matrices, and the D4 closing records (2026-10-25 to 2026-10-26)
+
+Toolkit `cf185d0` "nv2a: fixed-function texgen and texture matrices for stages 0-1" and the
+separate, differently-authored gate, game `18b1b4e` "tests: decide fixed-function texgen and
+texture matrices through the committed stream on CPU and Vulkan" and `2ce7c53` "tests: six
+private RED/GREEN controls for the texgen gate". The implementation author is distinct from the
+gate author. Process as in §31.82: Claude Code subagents one at a time under the owner's
+authorization, with orchestrator gating. Nothing is pushed: toolkit local `main` is `cf185d0`
+(1 ahead of origin) and the game is 2 ahead of origin before this record.
+
+**Production (toolkit `cf185d0`).** One file, `src/kernel/nv2a_pb_exec.c` (+138/−3), in a
+self-contained section (`FFTG_*` method defines at `:2539-2550`, helpers `ff_texgen_mode` `:2555`,
+`ff_texgen_generates` `:2561`, `ff_texcoord` `:2568`) with three hooks:
+- `fetch_texcoord` (`:2652`): the CPU path and `Nv2aVertex.u/v`; texel scaling for swizzled
+  formats is applied to the generated value.
+- `backend_vertex_extra` (`:3013`): `Nv2aVertexExtra.tex`, raw, never divided by q.
+- The per-stage usable test in `backend_batch` (`:3165`): a stage that generates S or T is now
+  usable without a texcoord array.
+
+It acts on fixed-function batches only (`batch_is_ffp`); vertex-program batches are untouched. No new
+methods are admitted, and the method numbers are local `FFTG_*` defines.
+
+**Rules used** (xemu `478b4f4961` read for facts only; cross-checked against reJSRF PR #65 / rexbox
+v0.0.28, MIT; no code copied).
+- Matrix words are rows: `out[j] = Σ W[4j+i]·in[i]` (`pgraph.c:1748-1784`, `glsl/common.h:94-96`).
+- Eye position e = MV·pos (words at 0x480). Eye normal n = IMV·(nrm,0) using the inverse model-view
+  words (0x580), normalized only under NORMALIZATION_ENABLE (0x3A4) (`vsh-ff.c:174-180`).
+- Modes: EYE_LINEAR = plane·e with the planes as delivered; OBJECT_LINEAR = plane·pos; SPHERE_MAP:
+  u = normalize(e.xyz), r = reflect(u,n), s,t = r.xy/(2|r+(0,0,1)|)+0.5, S and T only;
+  REFLECTION_MAP = r; NORMAL_MAP = n; DISABLE = the attribute (`vsh-ff.c:182-244`).
+- Texgen first, then the enabled matrix on all four components (`vsh-ff.c:246-252`). q is not divided
+  here; PROJECT2D divides at the stage.
+- The viewer is always local: xemu never reads TEXGEN_VIEW_MODEL (0x9CC) (the "TODO" at
+  `vsh-ff.c:188`).
+- JSRF's observed stage-0 state (§31.62): S/T/R NORMAL_MAP with matrix rows 0.5,0,0,0.5 /
+  0,−0.5,0,0.5 / 0,0,0,0 / 0,0,0,1, that is s = 0.5·n.x+0.5, t = 0.5−0.5·n.y. The gate reproduces
+  it verbatim.
+
+**The gate.** Files: `tests/test_texgen_stream.c`, `tests/test_texgen_stream_vk.c`,
+`tests/texgen_stream_cases.h`, `tests/texgen_stream_fixture.{c,h}`, `CMakeLists.txt` (19
+`jsrf_texgen_stream_<case>` and 19 `jsrf_texgen_stream_vk_<case>` tests) and, in `2ce7c53`, six
+private controls in `scripts/bumpenv-q-controls.py` (`--control texgen`). The pattern is that of
+step 5 (§31.82): real pushbuffer words through `nv2a_submit_pending` with the real decoder; the
+Vulkan half captures the executor-built batch into the real `vb_draw` on llvmpipe and also checks
+the batch's per-vertex s,t,q; every pixel is a literal ARGB value with its derivation written in
+`tests/texgen_stream_cases.h`; each half is checked independently.
+
+Cases (19): every mode; the JSRF state verbatim (three normals); an asymmetric matrix (transpose
+catcher); inverse model-view against model-view under a non-uniform scale; NORMALIZATION_ENABLE
+on and off; an eye plane through a non-identity model-view; matrix enable; stage 1/2; a
+vertex-program batch left unaffected; texel scaling; a projective q; and `limitation_texgen_q`,
+`limitation_stage23_matrix` and `limitation_viewer_model`.
+
+CPU-half limitation literals (pre-existing behaviour, not step-6 defects): the CPU fixed-function
+rasterizer samples stage 0 only (stage 1/2 draws write the diffuse `0xFF336699`) and never divides
+by q. The Vulkan half checks the hardware literal for both.
+
+**Evidence (Windows, 2026-10-25 and 2026-10-26, run by the orchestrator).**
+- Build and `just check` green.
+- **Old-red.** Against a private clone of toolkit `af78da4` (pre-step-6): the CPU half fails 17/19
+  on named assertions (the two that pass are the CPU stage-1/2 limitation literals, true on any
+  toolkit); the Vulkan half fails 19/19 on llvmpipe (the passthrough and vertex-program cases fail
+  only in their texgen-dependent draws).
+- **Private controls.** `texmat-transpose`, `texgen-modelview-normal`, `texgen-ignored`,
+  `sphere-formula`, `eye-plane-object` and `texmat-enable-ignored` each reported `RESULT: PASS`
+  (RED on named assertions, then GREEN), with "the shared toolkit is byte-identical: it was never
+  written". Example: `texmat-transpose` RED got `FF30D080`, wanted `FF907080`.
+- **Independent oracle.** The orchestrator recomputed 8 sampled literals from the stated rules in
+  scratch code (JSRF N1–N3, the asymmetric matrix on the attribute and after NORMAL_MAP, the
+  inverse model-view under non-uniform scale, sphere straight ahead and off axis): 8/8 match, and
+  the transposed reading gives `FF30D080`, exactly the control's RED value.
+- Full limited CTest: 240/240 in 648.93 s (the gate author's run: 240/240 in 636.00 s).
+- **Exploratory Vulkan e2e** `20261026-123133-068-keyscript-d4s6-e2e-vk` (pipeline cache off,
+  `RECOMP_GPU_ACK` absent): the script completed, icall 0, fatal 0. Frames at main-menu, intro-00
+  (Corn's Garage talk), intro-06, start, paused, resumed and b-after-jump2 were viewed side by side
+  with the v0.16.0 run `20261025-162427-307-keyscript-v016-e2e-vk` (§31.83). *Observation:* no
+  visible difference beyond timing. *Inference:* no regression at this capture size; whether the
+  title's NORMAL_MAP ramp is visible needs an xemu comparison or a targeted capture. No fidelity
+  claim.
+- The implementer's own 300 s e2e `20261025-210955-716-keyscript-d4s6-impl-e2e` was incomplete by
+  budget (the title takes about 125–145 s to appear; the accepted v0.16 run took 138.8 s) and is
+  not evidence.
+- No production defect was found.
+
+**Limitations** (recorded, not claimed as correct; ledger rows L75 to L81, the CPU rasterizer item taking two).
+1. TEXGEN_Q (0x3CC / 0x3DC) is not admitted; q is the attribute's w under S/T texgen.
+2. Texture matrices for stages 2 and 3 (0x740, 0x780) are not admitted; their enables are inert.
+3. The viewer is always local (TEXGEN_VIEW_MODEL 0x9CC is refused), as in xemu.
+4. Only model-view matrix 0 is used (no skinning, no further matrices). A missing normal reads
+   (0,0,0).
+5. A stage is usable without an array only if S or T has texgen, so R-only texgen leaves the stage
+   unbound.
+6. The CPU fixed-function rasterizer samples stage 0 only and never divides by q (pre-existing; the
+   Vulkan half carries the hardware literal).
+
+**Findings for later (not acted on).**
+- `lit_color` (`nv2a_pb_exec.c:2685`) disagrees with the xemu normal rule in three ways: it uses
+  the model-view (0x480) instead of the inverse (0x580); it always normalizes; and it flips
+  back-facing normals (`:2717`). The directions agree under rotation plus uniform scale and differ
+  under non-uniform scale. Fixed-function lighting stays deferred (D5 candidate); the flip is
+  ledgered as L82.
+- The diagnostics `count_texture_stage` and `trace_batch` still count a texgen-only stage as having
+  no texcoords.
+- `scripts/bumpenv-q-controls.py --help` crashes on a literal `%TEMP%` in the `--workdir` help
+  (pre-existing).
+
+**What this proves.** Within the committed-stream paths the walk admits, the CPU executor and the
+Vulkan uber-shader's batch input agree with the stated rules, literal for literal: every texgen
+mode, the matrix row order and enable, the inverse model-view normal path with and without
+normalization, eye planes through a non-identity model-view, and texel scaling. The pre-step-6
+toolkit decides the cases and each private control is decisive.
+
+**What it does not prove.** Hardware fixed-point behaviour; any in-game shading change (the one e2e
+showed none at this capture size); the six limitations above beyond their pinned behaviour;
+fixed-function lighting.
+
+**D4 closing summary (step 7).** D4 delivered:
+- *Coverage* (§§31.56–31.62): instrumentation across all four stages, a committed-stream and
+  real-Vulkan gate, and the four cache-off scene scripts. They found texgen and texture-matrix use
+  in all four, specular lighting, and no stage-mode >= 6 batch or Vulkan `rc_fallback`.
+- *Bump modes 6 and 7* (§§31.75–31.82): BUMPENVMAP and BUMPENVMAP_LUM on the CPU combiner and the
+  AOT Vulkan uber-shader, the q and binding repair, and the step-5 committed-stream gate with five
+  limitations.
+- *Texgen and texture matrices* (this section), with the gate above.
+
+D4 did not prove: any in-game bump or texgen correction (no run reached a bump batch; the one
+texgen e2e shows no visible change); hardware fixed-point behaviour; fixed-function lighting; or
+the limitations ledgered as L75 to L83 and under L62.
+
+Step 7 ledger rows added: L82 (the lit-colour back-face flip, absent from xemu) and L83 (the CPU
+combiner's zero texel for modes 8..31, which §31.82 limitation 5 already records; the row points
+there).
+
+**State.** D4 steps 1–7 are DONE locally; nothing is pushed. The optional owner-assisted step 8 (an
+in-game boost/attract comparison against xemu) remains optional. Next: handoff preparation, then D5.
