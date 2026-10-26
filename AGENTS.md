@@ -98,6 +98,16 @@ empty vertex-program corpus under `build/empty-corpus`
 executor's CPU interpreter. A capability-off build therefore needs no corpus, no
 `dxc` and no `VULKAN_SDK`; `just shaders` itself still does.
 
+Windows-only host tools, usable from the elevated ssh session (no external scratch scripts):
+`just limited -- <cmd>` runs any command un-elevated (the Vulkan loader ignores
+`VK_DRIVER_FILES` when elevated, so llvmpipe tests need it); `just ctest-limited [ctest
+args]` (a `-R` containing `|` is refused); `just controls <control>` runs the bump/texgen
+RED/GREEN controls with the software ICD from the build cache; `just audit [game|toolkit|both]`
+is the pre-push audit; `just tk-tests` runs the toolkit CTest and the standalone projects,
+reporting those in the toolkit's `tests/FORK-STATUS.md` as expected. Every script that needs
+the toolkit takes it from `scripts/toolkit_path.py` (build cache, `$XBOXRECOMP_DIR`, sibling;
+a cache/environment disagreement is refused).
+
 Underlying commands when a recipe is unavailable:
 
 ```powershell

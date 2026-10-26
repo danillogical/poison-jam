@@ -24,6 +24,11 @@
 #   just symbols        XDK symbol database from the original XBE (T2)
 #   just logq           DuckDB-backed log queries (T8)
 #   just gpu-report     decode a run's pending pushbuffer, name what the walk rejects
+#   just limited        run any command un-elevated (llvmpipe tests need it over ssh)
+#   just ctest-limited  CTest un-elevated; `-R` with `|` is refused
+#   just audit          pre-push audit of the game and/or toolkit outgoing commits
+#   just tk-tests       toolkit CTest + standalone projects, FORK-STATUS-aware
+#   just controls       bump/texgen RED/GREEN controls un-elevated with the software ICD
 #
 # Two host facts this file exists to stop rediscovering:
 #
@@ -41,7 +46,9 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 set shell := ["sh", "-cu"]
 
 python := "python"
-toolkit := "../xboxrecomp"
+# The ONE toolkit binding (build cache, $XBOXRECOMP_DIR, sibling), resolved by
+# scripts/toolkit_path.py; a cache/environment disagreement is refused, so no recipe runs.
+toolkit := `python -X utf8 scripts/toolkit_path.py`
 
 # Show the recipe list.
 default:
@@ -245,6 +252,29 @@ symbols:
 # DuckDB-backed log queries (T8).
 logq run query:
     {{python}} -X utf8 scripts/logq.py "{{run}}" --query {{query}}
+
+# Run ANY command un-elevated (limited-rights scheduled task) from an elevated ssh session;
+# `just limited -- <command> [args]`. Options (--cwd, --env K=V, --timeout) precede the `--`.
+limited *args:
+    {{python}} -X utf8 scripts/run-limited.py {{args}}
+
+# CTest un-elevated, so the software-ICD (llvmpipe) Vulkan tests run; e.g.
+# `just ctest-limited -R ^jsrf_texgen_stream_vk_` or `just ctest-limited --output-on-failure`.
+ctest-limited *args:
+    {{python}} -X utf8 scripts/ctest-limited.py {{args}}
+
+# Pre-push audit of the outgoing commits (blobs, secrets, forbidden paths, push URLs).
+audit repo="both":
+    {{python}} -X utf8 scripts/outgoing-audit.py --repo {{repo}}
+
+# Toolkit CTest plus the standalone tests/<name> projects, classified by FORK-STATUS.md.
+tk-tests *args:
+    {{python}} -X utf8 scripts/tk-tests.py {{args}}
+
+# The bump/texgen RED/GREEN controls, un-elevated with the software-ICD environment taken
+# from the build cache's XBR_VK_SW_ICD; `just controls texgen-ignored` or `just controls all`.
+controls control="all":
+    {{python}} -X utf8 scripts/run-limited.py --software-icd --cwd . --timeout 7200 -- {{python}} -X utf8 scripts/bumpenv-q-controls.py --control {{control}}
 
 # Decode the pending pushbuffer of a run and name what the walk would reject.
 gpu-report run *args:
