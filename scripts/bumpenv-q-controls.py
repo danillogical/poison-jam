@@ -24,6 +24,7 @@ in the record rather than run by every `ctest` invocation.
     python -X utf8 scripts/bumpenv-q-controls.py --control q-divide
     python -X utf8 scripts/bumpenv-q-controls.py --control bind-guard
     python -X utf8 scripts/bumpenv-q-controls.py --control all
+    python -X utf8 scripts/bumpenv-q-controls.py --control texgen
     python -X utf8 scripts/bumpenv-q-controls.py --control q-divide --keep
 
 The step-5 committed-stream gate (tests/test_bumpenv_stream.c, its Vulkan half
@@ -33,7 +34,13 @@ rule lives in both, and each run against the new focused stream cases:
 matrix-swap (m01 <-> m10), unsigned-delta (no sign3), drop-lum (mode 7's
 k = 1), stream-q-divide (the bump path divides by q again), wrong-source
 (SET_SHADER_OTHER_STAGE_INPUT ignored, the previous stage used) and refusal-gt8
-(the refusal threshold moved to > 8). Their Vulkan cases need the software ICD,
+(the refusal threshold moved to > 8). The step-6 texgen gate
+(tests/test_texgen_stream.c, tests/test_texgen_stream_vk.c and the literals in
+tests/texgen_stream_cases.h) adds six more, each a mutation of the CPU
+executor's fixed-function texgen block (which also builds the Vulkan batch's
+coordinates): texmat-transpose, texgen-modelview-normal, texgen-ignored,
+sphere-formula, eye-plane-object and texmat-enable-ignored. `--control texgen`
+runs those six in one owned root. Their Vulkan cases need the software ICD,
 which the loader ignores in an elevated process, so from an elevated session
 run this script through a limited-rights runner (run-limited.py beside
 ctest-limited.py in the Windows host's xbr-mac tools directory).
@@ -286,17 +293,125 @@ CONTROLS = {
     },
 }
 
+# ── The step-6 texgen gate's controls ────────────────────────────────────────
+# Each mutates the one fixed-function texgen/matrix block in the CPU executor;
+# the Vulkan half sees the same mutation because the executor builds the
+# batch's coordinates there. `texgen_cases` are jsrf_texgen_stream_* and
+# `texgen_vk_cases` jsrf_texgen_stream_vk_*, with *_still_green for cases the
+# mutation must not touch.
+
+TEXGEN_CONTROLS = {
+    "texmat-transpose": {
+        "title": "apply the texture matrix with its words as columns",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "out[i] = t[4 * i] * in[0] + t[4 * i + 1] * in[1]",
+             "out[i] = t[i] * in[0] + t[4 + i] * in[1]"),
+            ("src/kernel/nv2a_pb_exec.c",
+             "+ t[4 * i + 2] * in[2] + t[4 * i + 3] * in[3];",
+             "+ t[8 + i] * in[2] + t[12 + i] * in[3];"),
+        ],
+        "texgen_cases": ["texmat_asymmetric", "jsrf_observed_state"],
+        "texgen_markers": [
+            "asymmetric matrix on the attribute: words are rows",
+            "asymmetric matrix after NORMAL_MAP: texgen, then rows",
+            "JSRF state, normal N1",
+        ],
+        "texgen_still_green": ["mode_disable_passthrough", "mode_normal_map"],
+    },
+    "texgen-modelview-normal": {
+        "title": "transform the normal by the model-view words, not the inverse",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "n[i] = imv[4 * i] * nrm[0] + imv[4 * i + 1] * nrm[1] + imv[4 * i + 2] * nrm[2];",
+             "n[i] = mv[4 * i] * nrm[0] + mv[4 * i + 1] * nrm[1] + mv[4 * i + 2] * nrm[2];"),
+        ],
+        "texgen_cases": ["imv_nonuniform_scale"],
+        "texgen_markers": [
+            "non-uniform scale: the normal goes through the INVERSE words",
+            "asymmetric inverse model-view: its words are rows too",
+        ],
+        "texgen_still_green": ["jsrf_observed_state", "mode_normal_map"],
+    },
+    "texgen-ignored": {
+        "title": "texgen modes ignored: every component keeps the attribute",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "if (mode[0] || mode[1] || mode[2]) {", "if (0) {"),
+        ],
+        "texgen_cases": ["mode_normal_map", "jsrf_observed_state", "mode_sphere_map"],
+        "texgen_markers": [
+            "NORMAL_MAP S/T: (n.x, n.y)",
+            "JSRF state, normal N1",
+            "SPHERE_MAP S/T, viewer straight ahead",
+        ],
+    },
+    "sphere-formula": {
+        "title": "SPHERE_MAP drops its +0.5 bias",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "out[c] = m > 1e-8f ? r[c] / m + 0.5f : 0.5f;",
+             "out[c] = m > 1e-8f ? r[c] / m : 0.5f;"),
+        ],
+        "texgen_cases": ["mode_sphere_map", "limitation_viewer_model"],
+        "texgen_markers": [
+            "SPHERE_MAP S/T, viewer straight ahead",
+            "SPHERE_MAP S/T, off-axis viewer",
+            "LIMITATION local viewer: EYE_POSITION does not move SPHERE_MAP",
+        ],
+        "texgen_still_green": ["mode_reflection_map", "mode_normal_map"],
+    },
+    "eye-plane-object": {
+        "title": "EYE_LINEAR takes the plane against the object position",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "out[c] = pl[0] * e[0] + pl[1] * e[1] + pl[2] * e[2] + pl[3] * e[3];",
+             "out[c] = pl[0] * pos[0] + pl[1] * pos[1] + pl[2] * pos[2] + pl[3] * pos[3];"),
+        ],
+        "texgen_cases": ["eye_plane_modelview", "mode_eye_linear"],
+        "texgen_markers": [
+            "EYE_LINEAR plane meets the eye-space position",
+            "EYE_LINEAR S/T: plane . (MV pos)",
+        ],
+        "texgen_still_green": ["mode_object_linear"],
+    },
+    "texmat-enable-ignored": {
+        "title": "the matrix-enable word is ignored: delivered words always apply",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "if (st < 2 && s_reg[(FFTG_MATRIX_ENABLE + 4u * (uint32_t)st) / 4]) {",
+             "if (st < 2) {"),
+        ],
+        "texgen_cases": ["texmat_enable"],
+        "texgen_markers": [
+            "matrix enable 0: delivered words are not applied",
+        ],
+        "texgen_still_green": ["mode_normal_map", "jsrf_observed_state"],
+    },
+}
+for _spec in TEXGEN_CONTROLS.values():
+    # The same named assertions decide both halves.
+    _spec["texgen_vk_cases"] = list(_spec["texgen_cases"])
+    _spec["texgen_vk_markers"] = list(_spec["texgen_markers"])
+    if "texgen_still_green" in _spec:
+        _spec["texgen_vk_still_green"] = list(_spec["texgen_still_green"])
+CONTROLS.update(TEXGEN_CONTROLS)
+
 # CTest prefixes for each case group, in the order the groups are run.
 RED_GROUPS = [
     ("cpu_cases", "cpu_markers", "jsrf_bumpenv_q_cpu_"),
     ("vk_cases", "vk_markers", "jsrf_bumpenv_q_vk_"),
     ("stream_cases", "stream_markers", "jsrf_bumpenv_stream_"),
     ("stream_vk_cases", "stream_vk_markers", "jsrf_bumpenv_stream_vk_"),
+    ("texgen_cases", "texgen_markers", "jsrf_texgen_stream_"),
+    ("texgen_vk_cases", "texgen_vk_markers", "jsrf_texgen_stream_vk_"),
 ]
 GREEN_GROUPS = [
     ("cpu_still_green", "jsrf_bumpenv_q_cpu_"),
     ("stream_still_green", "jsrf_bumpenv_stream_"),
     ("stream_vk_still_green", "jsrf_bumpenv_stream_vk_"),
+    ("texgen_still_green", "jsrf_texgen_stream_"),
+    ("texgen_vk_still_green", "jsrf_texgen_stream_vk_"),
 ]
 
 
@@ -493,7 +608,8 @@ def acquire_work_area(args, game, toolkit):
 
 
 TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test",
-           "jsrf_bumpenv_stream_test", "jsrf_bumpenv_stream_vk_test"]
+           "jsrf_bumpenv_stream_test", "jsrf_bumpenv_stream_vk_test",
+           "jsrf_texgen_stream_test", "jsrf_texgen_stream_vk_test"]
 
 
 def _is_link(path):
@@ -854,7 +970,7 @@ def run_control(name, workdir, shared_before, owned=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--control", default="all",
-                    choices=sorted(CONTROLS) + ["all"])
+                    choices=sorted(CONTROLS) + ["all", "texgen"])
     ap.add_argument("--workdir", default=None,
                     help="private scratch directory to CREATE; it must not exist "
                          "yet (default: a fresh tmp-bumpenv-controls-<token> "
@@ -897,7 +1013,12 @@ def _run_controls(args, owned):
     for rel, h in shared_before.items():
         print(f"  {h}  {rel}")
 
-    names = sorted(CONTROLS) if args.control == "all" else [args.control]
+    if args.control == "all":
+        names = sorted(CONTROLS)
+    elif args.control == "texgen":
+        names = sorted(TEXGEN_CONTROLS)
+    else:
+        names = [args.control]
     ok = True
     for name in names:
         ok &= run_control(name, workdir, shared_before, owned)
