@@ -587,6 +587,38 @@ if(BUILD_TESTING)
                        "registered off Windows -- it drives the Win32 guest-memory layout and "
                        "the commit consumer, as jsrf_pbcov_stream_* does")
     endif()
+    # ── Fixed-function texgen and texture matrices, the committed-stream D4 step-6 gate ──────
+    # Authored by a worker distinct from the production change. Real pushbuffer words through
+    # nv2a_submit_pending (RECOMP_PB_EXEC=1) set the composite (so batches are fixed-function),
+    # model-view, inverse model-view, normals, texgen modes and planes, texture-matrix enables and
+    # words, and textures; the executor's decoding and CPU fixed-function rasteriser come from the
+    # linked toolkit library, and each pixel read back from the guest surface must equal a
+    # hand-derived literal (tests/texgen_stream_cases.h). The Vulkan half (jsrf_texgen_stream_vk_*,
+    # registered with the other Vulkan gates) replays the executor's own batch into the production
+    # vb_draw and checks the same literals. One process per case.
+    set(TEXGEN_STREAM_CASES
+        mode_eye_linear mode_object_linear mode_sphere_map mode_normal_map mode_reflection_map
+        mode_disable_passthrough jsrf_observed_state texmat_asymmetric imv_nonuniform_scale
+        normalization_enable eye_plane_modelview texmat_enable stage1_texgen
+        vertex_program_unaffected texel_scaling texmat_q_projective
+        limitation_texgen_q limitation_stage23_matrix limitation_viewer_model)
+    if(WIN32)
+    add_executable(jsrf_texgen_stream_test tests/test_texgen_stream.c
+        tests/texgen_stream_fixture.c)
+    target_include_directories(jsrf_texgen_stream_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+        ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_link_libraries(jsrf_texgen_stream_test PRIVATE xboxrecomp)
+    foreach(_case IN LISTS TEXGEN_STREAM_CASES)
+        add_test(NAME jsrf_texgen_stream_${_case}
+                 COMMAND jsrf_texgen_stream_test --case ${_case})
+        set_tests_properties(jsrf_texgen_stream_${_case} PROPERTIES TIMEOUT 120)
+    endforeach()
+    else()
+        message(STATUS "jsrf_texgen_stream_* (the D4 step-6 committed-stream texgen gate) is not "
+                       "registered off Windows -- it drives the Win32 guest-memory layout and "
+                       "the commit consumer, as jsrf_bumpenv_stream_* does")
+    endif()
     # This one runs the pushbuffers through the Direct3D 11 back end and exits 0 after printing
     # SKIP when it cannot create a device, which off Windows is always: a green no-op, so it is
     # not registered there (jsrf_gpu_backend_parity_vk is the Vulkan sibling that runs).
@@ -1087,6 +1119,47 @@ if(BUILD_TESTING)
         endif()
         else()
             message(STATUS "jsrf_bumpenv_stream_vk_* is not registered off Windows -- its "
+                           "committed-stream fixture drives the Win32 guest-memory layout")
+        endif()
+        # ── Fixed-function texgen and texture matrices, the D4 step-6 gate's Vulkan half ──────
+        # Its input is the batch the production executor built from the committed stream (texgen
+        # and the texture matrix applied by the executor); a capture vtable records each batch's
+        # per-vertex texture coordinates and hands the same pointer to the production vb_draw
+        # (#included with XBR_VK_BACKEND), and the pixel read back after vb_flip must equal the
+        # hand-derived literal. OBJECT_DEPENDS as for the step-5 half.
+        set_source_files_properties(tests/test_texgen_stream_vk.c PROPERTIES
+            OBJECT_DEPENDS
+            "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c;${XBOXRECOMP_DIR}/src/video/nv2a_vk_rc_coverage.h")
+        if(WIN32)
+        add_executable(jsrf_texgen_stream_vk_test tests/test_texgen_stream_vk.c
+            tests/texgen_stream_fixture.c)
+        add_dependencies(jsrf_texgen_stream_vk_test xbox_video)
+        target_include_directories(jsrf_texgen_stream_vk_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a ${XBOXRECOMP_DIR}/src/video
+            ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_texgen_stream_vk_test PRIVATE xboxrecomp ${CMAKE_DL_LIBS})
+        if(JSRF_VK_TEST_ICD)
+            file(TO_NATIVE_PATH "${JSRF_VK_TEST_ICD}" _vk_icd_tstream)
+            set(_tstream_vk_env
+                "VK_DRIVER_FILES=${_vk_icd_tstream};VK_ICD_FILENAMES=${_vk_icd_tstream};${JSRF_VK_TEST_SELECT};RECOMP_VK_PIPELINE_CACHE=off")
+            foreach(_case IN LISTS TEXGEN_STREAM_CASES)
+                add_test(NAME jsrf_texgen_stream_vk_${_case}
+                         COMMAND jsrf_texgen_stream_vk_test --case ${_case})
+                set_tests_properties(jsrf_texgen_stream_vk_${_case} PROPERTIES TIMEOUT 300
+                    SKIP_RETURN_CODE 77 ENVIRONMENT "${_tstream_vk_env}")
+            endforeach()
+        else()
+            foreach(_case IN LISTS TEXGEN_STREAM_CASES)
+                add_test(NAME jsrf_texgen_stream_vk_${_case}
+                         COMMAND jsrf_texgen_stream_vk_test --skip "XBR_VK_SW_ICD is not set")
+                set_tests_properties(jsrf_texgen_stream_vk_${_case} PROPERTIES TIMEOUT 20
+                    SKIP_RETURN_CODE 77)
+            endforeach()
+        endif()
+        else()
+            message(STATUS "jsrf_texgen_stream_vk_* is not registered off Windows -- its "
                            "committed-stream fixture drives the Win32 guest-memory layout")
         endif()
         # ── D4 Vulkan rc-refusal coverage, the real-device deciding gate ─────────────────────
