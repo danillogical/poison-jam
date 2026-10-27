@@ -8451,3 +8451,21 @@ failed). Strict smoke `20261027-000426-145-x8-smoke` (guest entry, checkpoints p
 counters do not split by format), so no in-game picture change is claimed. The D3D11 reference has
 the same alias rule (`nv2a_d3d11_backend.c:1110`) and still reads the stored alpha (L85; no new D3D11
 work).
+
+### §31.87 — Q4 (N6c): one depth surface per zeta, pinned (2026-10-27)
+
+**What was asked.** L62 says the Vulkan back end keeps depth per zeta address; nothing tested it.
+
+**Gate (test-only).** `jsrf_zeta_stream_{distinct,same,distinct_vp,same_vp}` and their `_vk_` halves.
+Quad P is drawn at depth 0.25 with zeta Z1; the zeta is switched to Z2 (`distinct`) or kept at Z1
+(`same`) for a depth-only clear to 1.0; then quad Q at depth 0.5 is drawn with Z1 over and beyond P.
+With separate surfaces P survives (Q fails LESS); with one shared surface the clear resets it and Q is
+drawn. The `_vp` cases draw the same scene through a vertex program. The Vulkan half also counts the
+back end's depth images (2 in `distinct`, 1 in `same`).
+
+**Result.** Production is correct: all eight pass on toolkit `1df8bb7`. One CPU-only limitation
+surfaced: the CPU fixed-function rasteriser (`raster_triangle`) has no depth test at all; only the
+vertex-program path (`raster_xf_triangle`) uses the per-zeta buffers. The CPU half of `distinct`
+carries that as a labelled limitation literal (L86). Controls (`just controls zeta`, RESULT: PASS):
+`zeta-vk-shared` (Vulkan depth cache ignores the address) and `zeta-cpu-shared` (CPU buffers ignore
+the offset) each went RED on "P region, upper-left triangle (4,4)" and GREEN restored.

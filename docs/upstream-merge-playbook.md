@@ -140,7 +140,7 @@ Clear stale analysis JSON first. Keep the disasm settings identical to last time
 2. `just check`.
 3. `just ctest-limited --output-on-failure`: the full limited CTest (241 tests on 2026-10-26; the
    count grows, and any failure or skip is the gate). Never use `|` in `-R`.
-4. All D4 gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`, `jsrf_wclip_stream_*`, `jsrf_x8alias_stream_*`.
+4. All D4 gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`, `jsrf_wclip_stream_*`, `jsrf_x8alias_stream_*`, `jsrf_zeta_stream_*`.
 
 ## 11. Runtime acceptance
 
