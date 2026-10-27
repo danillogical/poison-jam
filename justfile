@@ -253,7 +253,7 @@ symbols:
 logq run query:
     {{python}} -X utf8 scripts/logq.py "{{run}}" --query {{query}}
 
-# Run ANY command un-elevated (limited-rights scheduled task) from an elevated ssh session;
+# Run ANY command un-elevated (limited-rights scheduled task) from an elevated session (an ssh login to the laptop is elevated; when not elevated it runs the command directly);
 # `just limited -- <command> [args]`. Options (--cwd, --env K=V, --timeout) precede the `--`.
 limited *args:
     {{python}} -X utf8 scripts/run-limited.py {{args}}

@@ -58,7 +58,7 @@ outside the repository.
   `https://github.com/sp00nznet/xboxrecomp`, fetch-only with push URL `DISABLED`.
   Verify names and URLs with `git remote -v`.
 - Read toolkit `docs/GETTING_STARTED.md`, `docs/technical/indirect-calls.md` and
-  `lessons-learned.md` before toolkit changes.
+  `docs/technical/lessons-learned.md` before toolkit changes.
 - Preserve original assets and existing saves. Never track or push `game/`, retail
   lifted code, Xbox BIOS/MCPX/HDD assets, secrets or blobs over 100 MB.
 

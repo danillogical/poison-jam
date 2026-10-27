@@ -8,8 +8,8 @@ owns shortcuts; `config/stop-chain.json` owns stops.
 
 ## Current state (as of 2026-10-26)
 
-- Toolkit `cf185d0` is on origin. Game `a4216a0` is local, 5 ahead of origin: `a3eecf6`, `a0b7d1b`,
-  `382f798`, `a4216a0` and the docs commit that introduced this plan layout.
+- Toolkit `cf185d0` and the game (the 2026-10-26 handoff commits, from `a3eecf6` to the commit that
+  introduced this plan layout) are published; the last `PUSHED_TO` receipts are in TR §31.84.
 - D4 (BUMPENVMAP modes 6/7, then texgen and texture matrices, then records) is done (TR §31.84).
 - The xboxrecomp v0.16.0 catch-up is done (TR §31.83); serial guest mode (L34) stays because the
   upstream guest-CPU gate fails to reach the title.
@@ -75,28 +75,36 @@ Milestone names with their TR sections; details are in the TR.
 
 ## Work queue (after the 2026-10-26 handoff)
 
-Take the first unblocked item. Each item fits one session and ends in a local commit. Push only with
+Take the first unblocked item; an item marked **[stronger model or owner]** or **[owner-assisted]**
+blocks the queue (report it and stop, don't skip past it). Each item fits one session and ends in a
+local commit. Push only with
 the owner's confirmation, after `just audit`.
 
 **Gate discipline for every code item.**
-1. Write the gate before reading the implementation's reasoning, or have the implementation
-   reviewed by a separate session.
+1. Write the gate before reading the implementation's reasoning. Working alone, that means: write
+   and commit the test first (it must fail on the current code), then implement in a later session
+   without editing the test.
 2. Use literal expected values with their derivation written in a comment. Two renderers agreeing
    decides nothing.
 3. Old-red: build the new test against the previous toolkit commit in a private clone (see TR §31.84
    for the recipe), and require failures on NAMED assertions. A compile failure or a skip is not
    evidence.
-4. Add at least one private mutation control to `scripts/bumpenv-q-controls.py` (`just controls
-   <name>`) that goes RED, then GREEN.
+4. Add at least one private mutation control: an entry in the `CONTROLS` table of
+   `scripts/bumpenv-q-controls.py` (exact text edits, the cases that must go RED and their named
+   assertions; `--control` choices come from the table). `just controls <name>` must go RED, then
+   GREEN.
 5. Run `just build`, `just check`, the new tests and the full `just ctest-limited
-   --output-on-failure`, all green with none skipped.
+   --output-on-failure`, all green with none skipped (the test count grows as tests are added; any
+   failure or skip is the gate, not the count).
+6. A genuine production defect found by a gate: commit the failing test, record the defect in the
+   plan's Current state and the session summary, and stop for the owner.
 
 Items marked **[stronger model or owner]** need hardware-rule derivation or a design decision. A
 cheap agent should not start them; it should report that they are next and stop.
 
 | # | Item | Size | Gate | Stop and ask if |
 |---|---|---|---|---|
-| Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md` | 1–2 sessions | the playbook's gates | any playbook stop condition |
+| Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md`. If `HEAD..upstream/main` is empty, add a dated "no upstream change" line to Current state and take the next item. | 1–2 sessions | the playbook's gates | any playbook stop condition |
 | Q2 | **N6a: window clip as a scissor, not a refusal** (character select). Toolkit `src/video/nv2a_vk_backend.c` refusal path; make the clip a scissor rect. | 1 | a Vulkan fixture where a clipped draw keeps its pixels inside and drops those outside; old-red | the clip semantics differ between CPU and Vulkan |
 | Q3 | **N6b: a render target sampled as LIN_X8R8G8B8 reads alpha 1** (jsrf-recomp G54). Toolkit decoder / Vulkan sampler format. | 1 | CPU and Vulkan fixture literals with alpha 0xFF; old-red | the CPU decoder disagrees with Vulkan before the change |
 | Q4 | **N6c: one depth surface per zeta.** Add a test proving the Vulkan back end keys depth by zeta address (L62). | 1 | a fixture with two zetas; a mutation control that shares them | production is wrong (report it, don't fix it) |

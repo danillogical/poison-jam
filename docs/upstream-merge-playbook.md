@@ -98,8 +98,13 @@ The real toolkit stays read-only in this step.
 
 Clear stale analysis JSON first. Keep the disasm settings identical to last time.
 
-1. Toolkit disasm, funcid and ABI stages, in the shared toolkit (about 431 s).
-2. Game disasm `--text-only` (about 447 s).
+1. Toolkit analysis, from `C:\Users\logic\Repos\xboxrecomp` with `C:\Python313\python.exe` and the
+   capstone `PYTHONPATH` above: `python -m tools.disasm <game>\game\default.xbe` (about 431 s), then
+   `python -m tools.func_id <game>\game\default.xbe` and `python -m tools.abi_analysis
+   <game>\game\default.xbe` (seconds each).
+2. Game disasm, from the game root with the toolkit on `PYTHONPATH` (`<toolkit>;` plus the capstone
+   path): `python -m tools.disasm game\default.xbe --text-only` (about 447 s). This writes the
+   game's `tools/disasm/output/functions.json`, which recovery needs.
 3. `just regen` (about 220 s).
 4. `python -X utf8 scripts\relift-selected.py boundaries`.
 5. `python -X utf8 scripts\recover-functions.py` (about 37 s).
@@ -133,7 +138,8 @@ Clear stale analysis JSON first. Keep the disasm settings identical to last time
 
 1. Guarded `just build`. Compare the warning set with the previous build; 18 MSB8028 is the known set.
 2. `just check`.
-3. `just ctest-limited --output-on-failure`: the full limited CTest, 241 tests as of 2026-10-26. Never use `|` in `-R`.
+3. `just ctest-limited --output-on-failure`: the full limited CTest (241 tests on 2026-10-26; the
+   count grows, and any failure or skip is the gate). Never use `|` in `-R`.
 4. All D4 gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`.
 
 ## 11. Runtime acceptance
@@ -156,7 +162,7 @@ One run at a time. The title takes about 125-145 s to appear, so never use a bud
 
 ## 12. reJSRF check
 
-1. `git log upstream/main..nworkers/rejsrf` in the toolkit.
+1. `git fetch nworkers`, then `git log upstream/main..nworkers/rejsrf` in the toolkit.
 2. Check the reJSRF game repo and `reexec/rexbox` with `gh api` for MIT fixes that apply to our NV2A LLE path.
 3. Perf-only and HLE-D3D8 changes usually do not apply.
 4. Port with `git cherry-pick -x` and keep the attribution.
