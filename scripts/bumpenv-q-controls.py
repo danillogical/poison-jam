@@ -40,10 +40,12 @@ tests/texgen_stream_cases.h) adds six more, each a mutation of the CPU
 executor's fixed-function texgen block (which also builds the Vulkan batch's
 coordinates): texmat-transpose, texgen-modelview-normal, texgen-ignored,
 sphere-formula, eye-plane-object and texmat-enable-ignored. `--control texgen`
-runs those six in one owned root. Their Vulkan cases need the software ICD,
-which the loader ignores in an elevated process, so from an elevated session
-run this script through a limited-rights runner (run-limited.py beside
-ctest-limited.py in the Windows host's xbr-mac tools directory).
+runs those six in one owned root. The window-clip gate (tests/test_wclip_stream.c,
+tests/test_wclip_stream_vk.c, literals in tests/wclip_stream_cases.h) adds four:
+wclip-xmax-exclusive, wclip-aa-ignored, wclip-exclusive-as-inclusive and
+wclip-vk-ignored; `--control wclip` runs them. Vulkan cases need the software
+ICD, which the loader ignores in an elevated process, so from an elevated
+session run this script through `just controls <name>` (scripts/run-limited.py).
 
 The scratch directory defaults to a FRESH `tmp-bumpenv-controls-<token>` sibling
 of the game checkout and must live outside both repos AND outside %TEMP%:
@@ -95,6 +97,7 @@ TOOLKIT = toolkit_path()
 # shared refusal rule the refusal-gt8 control moves). Read-only here.
 PRODUCTION = [
     "src/kernel/nv2a_pb_exec.c",
+    "src/kernel/nv2a_backend.h",
     "src/video/nv2a_vk_backend.c",
     "src/video/shaders/nv2a_vk_rc.hlsl",
     "src/video/nv2a_vk_rc_coverage.h",
@@ -400,6 +403,71 @@ for _spec in TEXGEN_CONTROLS.values():
         _spec["texgen_vk_still_green"] = list(_spec["texgen_still_green"])
 CONTROLS.update(TEXGEN_CONTROLS)
 
+# The window-clip gate's controls. `wclip_cases` are jsrf_wclip_stream_* and
+# `wclip_vk_cases` jsrf_wclip_stream_vk_*; each half names its own markers.
+WCLIP_CONTROLS = {
+    "wclip-xmax-exclusive": {
+        "title": "treat xmax as exclusive (drop the rect's last column)",
+        "edits": [
+            ("src/kernel/nv2a_backend.h",
+             "rx0 = xa * sx; rx1 = (xb + 1) * sx;",
+             "rx0 = xa * sx; rx1 = xb * sx;"),
+        ],
+        "wclip_cases": ["single", "full"],
+        "wclip_markers": ["inside xmax/ymax corner (41,30) is drawn",
+                          "top-right (63,0) is drawn"],
+        "wclip_vk_cases": ["single", "full"],
+        "wclip_vk_markers": ["inside xmax/ymax corner (41,30) is drawn",
+                             "top-right (63,0) is drawn"],
+        "wclip_still_green": ["exclusive"],
+        "wclip_vk_still_green": ["exclusive"],
+    },
+    "wclip-aa-ignored": {
+        "title": "use logical window-clip pixels on an anti-aliased surface",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "uint32_t sx = s_gpu.aa_sx > 1.5f ? 2 : 1, sy = s_gpu.aa_sy > 1.5f ? 2 : 1;",
+             "uint32_t sx = 1, sy = 1;"),
+            ("src/video/nv2a_vk_backend.c",
+             "nv2a_wclip_bounds(rs, s->aa_sx, s->aa_sy,",
+             "nv2a_wclip_bounds(rs, 1, 1,"),
+        ],
+        "wclip_cases": ["aa2x2"],
+        "wclip_markers": ["inside last real pixel (19,19) is drawn"],
+        "wclip_vk_cases": ["aa2x2"],
+        "wclip_vk_markers": ["inside last real pixel (19,19) is drawn"],
+        "wclip_still_green": ["single"],
+        "wclip_vk_still_green": ["single"],
+    },
+    "wclip-exclusive-as-inclusive": {
+        "title": "ignore the window-clip type bit",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "r->wclip_exclusive = param & 1;",
+             "r->wclip_exclusive = 0;"),
+        ],
+        "wclip_cases": ["exclusive"],
+        "wclip_markers": ["inside centre (30,30) is not drawn"],
+        "wclip_vk_cases": ["exclusive"],
+        "wclip_vk_markers": ["outside xmin-1 (19,30) is drawn"],
+        "wclip_still_green": ["single"],
+        "wclip_vk_still_green": ["single"],
+    },
+    "wclip-vk-ignored": {
+        "title": "the Vulkan back end never applies the window clip",
+        "edits": [
+            ("src/video/nv2a_vk_backend.c",
+             "if (!vb_wclip(s, rs, &dr->scissor))",
+             "if (0 && !vb_wclip(s, rs, &dr->scissor))"),
+        ],
+        "wclip_vk_cases": ["single", "aa2x2"],
+        "wclip_vk_markers": ["outside xmax+1 (42,20) is background",
+                             "outside (xmax+1)*2 (20,15) is background"],
+        "wclip_still_green": ["single", "aa2x2"],
+    },
+}
+CONTROLS.update(WCLIP_CONTROLS)
+
 # CTest prefixes for each case group, in the order the groups are run.
 RED_GROUPS = [
     ("cpu_cases", "cpu_markers", "jsrf_bumpenv_q_cpu_"),
@@ -408,6 +476,8 @@ RED_GROUPS = [
     ("stream_vk_cases", "stream_vk_markers", "jsrf_bumpenv_stream_vk_"),
     ("texgen_cases", "texgen_markers", "jsrf_texgen_stream_"),
     ("texgen_vk_cases", "texgen_vk_markers", "jsrf_texgen_stream_vk_"),
+    ("wclip_cases", "wclip_markers", "jsrf_wclip_stream_"),
+    ("wclip_vk_cases", "wclip_vk_markers", "jsrf_wclip_stream_vk_"),
 ]
 GREEN_GROUPS = [
     ("cpu_still_green", "jsrf_bumpenv_q_cpu_"),
@@ -415,6 +485,8 @@ GREEN_GROUPS = [
     ("stream_vk_still_green", "jsrf_bumpenv_stream_vk_"),
     ("texgen_still_green", "jsrf_texgen_stream_"),
     ("texgen_vk_still_green", "jsrf_texgen_stream_vk_"),
+    ("wclip_still_green", "jsrf_wclip_stream_"),
+    ("wclip_vk_still_green", "jsrf_wclip_stream_vk_"),
 ]
 
 
@@ -612,7 +684,8 @@ def acquire_work_area(args, game, toolkit):
 
 TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test",
            "jsrf_bumpenv_stream_test", "jsrf_bumpenv_stream_vk_test",
-           "jsrf_texgen_stream_test", "jsrf_texgen_stream_vk_test"]
+           "jsrf_texgen_stream_test", "jsrf_texgen_stream_vk_test",
+           "jsrf_wclip_stream_test", "jsrf_wclip_stream_vk_test"]
 
 
 def _is_link(path):
@@ -973,7 +1046,7 @@ def run_control(name, workdir, shared_before, owned=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--control", default="all",
-                    choices=sorted(CONTROLS) + ["all", "texgen"])
+                    choices=sorted(CONTROLS) + ["all", "texgen", "wclip"])
     ap.add_argument("--workdir", default=None,
                     help="private scratch directory to CREATE; it must not exist "
                          "yet (default: a fresh tmp-bumpenv-controls-<token> "
@@ -1020,6 +1093,8 @@ def _run_controls(args, owned):
         names = sorted(CONTROLS)
     elif args.control == "texgen":
         names = sorted(TEXGEN_CONTROLS)
+    elif args.control == "wclip":
+        names = sorted(WCLIP_CONTROLS)
     else:
         names = [args.control]
     ok = True
