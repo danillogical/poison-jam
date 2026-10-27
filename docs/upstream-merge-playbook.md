@@ -90,8 +90,9 @@ The real toolkit stays read-only in this step.
 ## 6. Back up ignored generated output
 
 1. Copy `src/recomp/` and `tools/disasm/output/` (game), and `tools/{disasm,func_id,abi_analysis,recomp}/output` (toolkit), to a dated folder outside both repos.
-2. Verify with file counts and hashes.
-3. Keep the backup until the owner accepts the merge; it is the baseline for step 8.
+2. Verify with file counts and hashes: `python -X utf8 scripts\tree-compare.py <live> <backup>`.
+3. Record the baseline inventory: `python -X utf8 scripts\recomp-inventory.py src\recomp <backup>\inventory.json` (full inventory to the file, summary to stdout).
+4. Keep the backup until the owner accepts the merge; it is the baseline for step 8.
 
 ## 7. Rebuild from nothing
 
@@ -106,7 +107,7 @@ Clear stale analysis JSON first. Keep the disasm settings identical to last time
 
 ## 8. Classify the deltas against the backup
 
-1. Compare against the backup inventory:
+1. Re-run `scripts\recomp-inventory.py src\recomp <new>.json` on the new tree and compare it with the backup inventory:
    - function count;
    - dispatch entries;
    - direct dispatch;
