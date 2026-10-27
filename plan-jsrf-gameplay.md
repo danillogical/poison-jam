@@ -14,7 +14,13 @@ owns shortcuts; `config/stop-chain.json` owns stops.
 - The xboxrecomp v0.16.0 catch-up is done (TR §31.83); serial guest mode (L34) stays because the
   upstream guest-CPU gate fails to reach the title.
 - Strict smoke, Vulkan e2e and D3D11 e2e pass on the v0.16.0 tree (icall 0, fatal 0).
-- The next item is the Work queue's Q1, the weekly upstream merge.
+- 2026-10-26, Q1: no upstream change (`upstream/main` is still v0.16.0 `f0f8a46`; 10 open upstream
+  PRs, #265-#274, to recheck next week; #267 and #268/#269 touch owner-kept designs). The nworkers
+  `rejsrf` toolkit branch is unchanged; reJSRF v0.0.53-54 and rexbox v0.0.14-16 are build/locale/Linux
+  only.
+- 2026-10-26, Q2 (N6a): the window clip is a scissor (toolkit `88fedc4`, game gate `c0c4d61`, TR
+  §31.85, L84); local, not pushed.
+- The next item is Q3, LIN_X8R8G8B8 alpha.
 - Older dated status paragraphs and the pre-approved R1-R5/N-series text moved to
   `docs/jsrf-operating-history.md`, section "Plan history moved on 2026-10-26".
 
@@ -72,6 +78,7 @@ Milestone names with their TR sections; details are in the TR.
 - **D4 steps 4-5:** BUMPENVMAP modes 6/7 and their committed-stream gate (TR §§31.75-31.82).
 - **xboxrecomp v0.16.0 catch-up** (TR §31.83).
 - **D4 steps 6-7:** texgen and texture matrices, closing records (TR §31.84, L75-L83).
+- **Q2 (N6a):** the window clip is a scissor (TR §31.85, L84).
 
 ## Work queue (after the 2026-10-26 handoff)
 
@@ -115,7 +122,6 @@ cheap agent should not start them; it should report that they are next and stop.
 | # | Item | Size | Gate | Stop and ask if |
 |---|---|---|---|---|
 | Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md`. If `HEAD..upstream/main` is empty, add a dated "no upstream change" line to Current state and take the next item. | 1–2 sessions | the playbook's gates | any playbook stop condition |
-| Q2 | **N6a: window clip as a scissor, not a refusal** (character select). Toolkit `src/video/nv2a_vk_backend.c` refusal path; make the clip a scissor rect. | 1 | a Vulkan fixture where a clipped draw keeps its pixels inside and drops those outside; old-red | the clip semantics differ between CPU and Vulkan |
 | Q3 | **N6b: a render target sampled as LIN_X8R8G8B8 reads alpha 1** (jsrf-recomp G54). Toolkit decoder / Vulkan sampler format. | 1 | CPU and Vulkan fixture literals with alpha 0xFF; old-red | the CPU decoder disagrees with Vulkan before the change |
 | Q4 | **N6c: one depth surface per zeta.** Add a test proving the Vulkan back end keys depth by zeta address (L62). | 1 | a fixture with two zetas; a mutation control that shares them | production is wrong (report it, don't fix it) |
 | Q5 | **N6d / lighting: the fixed-function infinite-light sign** (`max(0, dot(N, L))`) **and the `lit_color` normal** (TR §31.84: it uses the model-view, not the inverse, always normalizes and back-face flips, L82). **[stronger model or owner]** | 1–2 | xemu `vsh-ff.c` lighting rules, a literal gate like the texgen gate | always: the rules need derivation |
@@ -126,7 +132,7 @@ cheap agent should not start them; it should report that they are next and stop.
 | Q10 | **D5: plan the reJSRF-derived items** that the D3/D4 evidence shows apply (TR §31.55–31.56 table): ADXM exclusion, lighting gaps. Each becomes its own gated item. | planning | owner approval of the item list | always (it's a planning step) |
 | Q11 | **R5: reduce duplicated vertex-program decode logic** (`decode_program`, `derived_mask`, `find-vertex-programs.py` `program_info`). Low priority. | 1 | `gen-shaders.py --check` byte-identical corpus, V6 conformance green, a decode mutation rejected | the corpus bytes change |
 | Q12 | **Divergence clean-up after the next regeneration**: delete `RECOMP_BACKEDGE`, `xbox_inb/outb`, `usb_gamepad_output` and the `xbox_VblankAckHeld` stub (see the playbook's divergence inventory). | 1 | build, toolkit tests, full CTest, strict smoke | anything still references them at runtime |
-| Q13 | **Small tooling debts**: `scripts/pbcov-mutants.py:66` hard-codes the ICD path (use the cache's `XBR_VK_SW_ICD`); the 3 pre-existing `RunnerPreflightTests` failures in `tests/test_run_profiles.py` (fake runner log lacks `[SAVE] udata_root`); the pre-commit hook's `GIT_INDEX_FILE` leaks into `check-merge-structure.py` when `git commit -- <paths>` is used (until fixed, stage with `git add`, then `git commit -F`). | 1 | the affected tests green | — |
+| Q13 | **Small tooling debts**: `scripts/pbcov-mutants.py:66` hard-codes the ICD path (use the cache's `XBR_VK_SW_ICD`); the 3 pre-existing `RunnerPreflightTests` failures in `tests/test_run_profiles.py` (fake runner log lacks `[SAVE] udata_root`); the pre-commit hook's `GIT_INDEX_FILE` leaks into `check-merge-structure.py` when `git commit -- <paths>` is used (until fixed, stage with `git add`, then `git commit -F`); toolkit `xbox_guest_meter` (`tests/kernel_guest_cpu`) fails intermittently right after a full `just tk-tests` run ("the yield came back before the worker had run", TR §31.85): make it load-tolerant or list it in `tests/FORK-STATUS.md`. | 1 | the affected tests green | — |
 
 ## Facts, tools and traps
 

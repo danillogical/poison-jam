@@ -140,7 +140,7 @@ Clear stale analysis JSON first. Keep the disasm settings identical to last time
 2. `just check`.
 3. `just ctest-limited --output-on-failure`: the full limited CTest (241 tests on 2026-10-26; the
    count grows, and any failure or skip is the gate). Never use `|` in `-R`.
-4. All D4 gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`.
+4. All D4 gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`, `jsrf_wclip_stream_*`.
 
 ## 11. Runtime acceptance
 
@@ -193,6 +193,8 @@ Where our deltas live. Each is a candidate to propose upstream or to delete.
 - The tiny-w screen-space clip path (L67).
 - The model-driven vblank clock.
 - `af78da4`: late-owner aliases that are complete routines keep a body.
+- `88fedc4`: the window clip as a draw scissor (`Nv2aRenderState.wclip_*`, `nv2a_wclip_bounds`;
+  TR §31.85, L84).
 - Not proposed: the texgen helper `cf185d0` is deliberately self-contained.
 
 **Delete after the next regeneration**

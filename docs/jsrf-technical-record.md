@@ -8368,3 +8368,49 @@ PUSHED_TO: origin / BRANCH: master / COMMIT: 0d34b46 / REMOTE_URL: https://githu
 **Handoff publication (2026-10-26).** Game `a3eecf6` (one toolkit resolver), `a0b7d1b` (host tools: run-limited, ctest-limited, outgoing-audit, tk-tests, just recipes), `382f798` (resolver import fix), `a4216a0` (upstream merge playbook), `80eaae1` (AGENTS.md for one agent working alone; plan cut to current state and the work queue, 876 moved lines kept verbatim in the operating history), `e1eb8b1` (regeneration inventory and tree comparison) and `9b4eddf`/`0dcfafc` (fixes from two cold-start dry runs). Verified on the laptop before the push: `just build`, `just check`, the full limited CTest 241/241 in 565.52 s, `just controls texgen-ignored` RED then GREEN, the resolver refusing a mismatched `XBOXRECOMP_DIR`, `ctest-limited.py` refusing `|`, and `just audit` refusing a planted `game/` path on a throwaway branch.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 0dcfafc / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward bab66f0..0dcfafc (8 commits, the handoff tooling and docs), on the owner's confirmation after `just audit` (59 outgoing blobs, largest 171,578 bytes, 0 secret hits, no forbidden path); toolkit unchanged at cf185d0 = origin, upstream and nworkers push URLs DISABLED.
+
+### §31.85 — Q2 (N6a): the window clip is a scissor (2026-10-26)
+
+**Why.** andeecollard/jsrf-recomp `3fa88c6` found that JSRF's character select draws its two 3D
+panels through a window clip smaller than the surface: their back end refused 495,110 such draws in
+90 s, and the panels were black. Our executor admitted the window-clip words (`0x02B4`, `0x02C0`,
+`0x02E0`) but ignored them, so on both the CPU and Vulkan paths such draws were not clipped at all.
+
+**Rules (xemu facts, no code copied).** TYPE bit 0 picks inclusive (0) or exclusive (1). Writing
+rectangle slot *i* writes slots *i*..7, so D3D's single scissor, a write to slot 0, fills all
+eight. A rectangle covers logical pixels `xmin..xmax`, `ymin..ymax`, both ends inclusive (12-bit
+fields), scaled by the anti-aliasing factor. Inclusive: a pixel is drawn only inside some
+rectangle; exclusive: only inside none. Draws only; clears are unaffected. Model choice: until a
+window-clip word arrives there is no clip.
+
+**Change (toolkit `88fedc4`).** The state is captured into `Nv2aRenderState`
+(`src/kernel/nv2a_backend.h`, with the shared helper `nv2a_wclip_bounds`). The CPU executor is
+exact: draw bounds are clamped, and only an exclusive clip or distinct inclusive rectangles add a
+per-pixel test (`wclip_setup`/`wclip_pass` in `src/kernel/nv2a_pb_exec.c`). The Vulkan back end
+intersects the draw scissor in `vb_setup` (not `vb_scissor`, which clears use): exact for identical
+rectangles; distinct inclusive rectangles use the bounding box and an exclusive clip is not applied,
+both counted as `wclip_approx` (L84). D3D11 is unchanged (no new D3D11 work). Slots 1-7 (`0x02C4`..,
+`0x02E4`..) are still not admitted by the walk, which only grows from witnessed submissions (L44).
+
+**Gate (game `c0c4d61`, written and committed before the implementation by a different worker).**
+`jsrf_wclip_stream_{single,full,exclusive,beyond_surface_clip,aa2x2}` and their `_vk_` halves:
+real pushbuffer words, hand-derived pixel literals, the Vulkan exclusive limitation labelled. On
+toolkit `cf185d0` 9 of 10 failed on named pixel assertions only (`full`, the no-regression case,
+passed on both; the Vulkan `exclusive` limitation passed, as labelled). With `88fedc4`: 10/10.
+Controls (`just controls wclip`, RESULT: PASS): `wclip-xmax-exclusive`, `wclip-aa-ignored`,
+`wclip-exclusive-as-inclusive` and `wclip-vk-ignored` each went RED on their named assertions and
+GREEN restored, the shared toolkit byte-identical.
+
+**Verification.** `just build` (no new warnings in the changed hunks), `just check`, full
+`just ctest-limited` 251/251 with none skipped, `just tk-tests` (all as `tests/FORK-STATUS.md`
+expects except one `xbox_guest_meter` failure: it failed 3 of 4 back-to-back reruns right after the
+full toolkit run, then passed 6/6 on both `88fedc4` and a clean `cf185d0` worktree; it does not
+compile NV2A code, so it is a timing flake, Q13). Strict smoke `20261026-224148-436-wclip-smoke`
+(guest entry, checkpoints passed, no fatal or ICALL line). Vulkan e2e
+`20261026-224321-618-keyscript-e2e-vk-wclip` (560 s, exploratory): icall 0, fatal 0, 1,079,426
+draws, `wclip_approx=0`, `validation_errors=0`, `dropped_tris=8` as in the two previous Vulkan
+e2e runs; the final Garage snapshot matches `20261026-123133-068-keyscript-d4s6-e2e-vk`.
+
+**What it does not prove.** The character-select panels themselves: the e2e route does not reach
+character select, so no frame shows the fix. Union semantics have no stream gate (slots 1-7 are not
+admitted). Clear behaviour under a window clip was not examined.
