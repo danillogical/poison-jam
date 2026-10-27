@@ -103,7 +103,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from toolkit_path import toolkit_path
+# Loaded by path from tests and text-stability.py too, where scripts/ is not on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from toolkit_path import toolkit_path  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build" / "Release"
