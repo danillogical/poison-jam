@@ -46,7 +46,9 @@ wclip-xmax-exclusive, wclip-aa-ignored, wclip-exclusive-as-inclusive and
 wclip-vk-ignored; `--control wclip` runs them. The LIN_X8R8G8B8 alias gate
 (tests/test_x8alias_stream*.c, tests/x8alias_stream_cases.h) adds four more,
 `--control x8`: x8-alias-identity-view, x8-self-identity-view,
-x8-swizzle-dropped and x8-cpu-alpha-kept. Vulkan cases need the software
+x8-swizzle-dropped and x8-cpu-alpha-kept. The per-zeta depth gate
+(tests/test_zeta_stream*.c, tests/zeta_stream_cases.h) adds two, `--control
+zeta`: zeta-vk-shared and zeta-cpu-shared. Vulkan cases need the software
 ICD, which the loader ignores in an elevated process, so from an elevated
 session run this script through `just controls <name>` (scripts/run-limited.py).
 
@@ -522,6 +524,35 @@ X8_CONTROLS = {
 }
 CONTROLS.update(X8_CONTROLS)
 
+# The per-zeta depth gate's controls: `zeta_cases` are jsrf_zeta_stream_*,
+# `zeta_vk_cases` jsrf_zeta_stream_vk_*.
+ZETA_CONTROLS = {
+    "zeta-vk-shared": {
+        "title": "the Vulkan back end shares one depth image across zeta addresses",
+        "edits": [
+            ("src/video/nv2a_vk_backend.c",
+             "if (c->used && c->va == va && c->w == w && c->h == h) {",
+             "if (c->used && c->w == w && c->h == h) {"),
+        ],
+        "zeta_vk_cases": ["distinct", "distinct_vp"],
+        "zeta_vk_markers": ["P region, upper-left triangle (4,4)"],
+        "zeta_vk_still_green": ["same", "same_vp"],
+        "zeta_still_green": ["distinct_vp"],
+    },
+    "zeta-cpu-shared": {
+        "title": "the CPU executor shares one depth buffer across zeta offsets",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "if (s_zbufs[i].z && s_zbufs[i].offset == s_gpu.zeta_offset)",
+             "if (s_zbufs[i].z)"),
+        ],
+        "zeta_cases": ["distinct_vp"],
+        "zeta_markers": ["P region, upper-left triangle (4,4)"],
+        "zeta_still_green": ["same_vp"],
+    },
+}
+CONTROLS.update(ZETA_CONTROLS)
+
 # CTest prefixes for each case group, in the order the groups are run.
 RED_GROUPS = [
     ("cpu_cases", "cpu_markers", "jsrf_bumpenv_q_cpu_"),
@@ -534,6 +565,8 @@ RED_GROUPS = [
     ("wclip_vk_cases", "wclip_vk_markers", "jsrf_wclip_stream_vk_"),
     ("x8_cases", "x8_markers", "jsrf_x8alias_stream_"),
     ("x8_vk_cases", "x8_vk_markers", "jsrf_x8alias_stream_vk_"),
+    ("zeta_cases", "zeta_markers", "jsrf_zeta_stream_"),
+    ("zeta_vk_cases", "zeta_vk_markers", "jsrf_zeta_stream_vk_"),
 ]
 GREEN_GROUPS = [
     ("cpu_still_green", "jsrf_bumpenv_q_cpu_"),
@@ -545,6 +578,8 @@ GREEN_GROUPS = [
     ("wclip_vk_still_green", "jsrf_wclip_stream_vk_"),
     ("x8_still_green", "jsrf_x8alias_stream_"),
     ("x8_vk_still_green", "jsrf_x8alias_stream_vk_"),
+    ("zeta_still_green", "jsrf_zeta_stream_"),
+    ("zeta_vk_still_green", "jsrf_zeta_stream_vk_"),
 ]
 
 
@@ -744,7 +779,8 @@ TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test",
            "jsrf_bumpenv_stream_test", "jsrf_bumpenv_stream_vk_test",
            "jsrf_texgen_stream_test", "jsrf_texgen_stream_vk_test",
            "jsrf_wclip_stream_test", "jsrf_wclip_stream_vk_test",
-           "jsrf_x8alias_stream_test", "jsrf_x8alias_stream_vk_test"]
+           "jsrf_x8alias_stream_test", "jsrf_x8alias_stream_vk_test",
+           "jsrf_zeta_stream_test", "jsrf_zeta_stream_vk_test"]
 
 
 def _is_link(path):
@@ -1105,7 +1141,7 @@ def run_control(name, workdir, shared_before, owned=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--control", default="all",
-                    choices=sorted(CONTROLS) + ["all", "texgen", "wclip", "x8"])
+                    choices=sorted(CONTROLS) + ["all", "texgen", "wclip", "x8", "zeta"])
     ap.add_argument("--workdir", default=None,
                     help="private scratch directory to CREATE; it must not exist "
                          "yet (default: a fresh tmp-bumpenv-controls-<token> "
@@ -1156,6 +1192,8 @@ def _run_controls(args, owned):
         names = sorted(WCLIP_CONTROLS)
     elif args.control == "x8":
         names = sorted(X8_CONTROLS)
+    elif args.control == "zeta":
+        names = sorted(ZETA_CONTROLS)
     else:
         names = [args.control]
     ok = True

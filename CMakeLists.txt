@@ -671,6 +671,32 @@ if(BUILD_TESTING)
                        "registered off Windows -- it drives the Win32 guest-memory layout and "
                        "the commit consumer, as jsrf_wclip_stream_* does")
     endif()
+    # ── NV2A depth per zeta address, the committed-stream gate (test first) ──────────────────
+    # Real pushbuffer words through nv2a_submit_pending (RECOMP_PB_EXEC=1) draw into one colour
+    # target with depth test LESS, switching SET_SURFACE_ZETA_OFFSET between a draw, a depth-only
+    # clear and a second draw; each named pixel read back from the guest surface must equal a
+    # hand-derived literal (tests/zeta_stream_cases.h): a different zeta address keeps its own
+    # depth (`distinct`), the same address shares it (`same`); `_vp` cases draw in program mode.
+    # The CPU fixed-function rasteriser has no depth test, so its `distinct` expects a labelled
+    # LIMITATION literal; the other cases hold the hardware rule on both halves. One process per case.
+    set(ZETA_STREAM_CASES distinct same distinct_vp same_vp)
+    if(WIN32)
+    add_executable(jsrf_zeta_stream_test tests/test_zeta_stream.c
+        tests/zeta_stream_fixture.c)
+    target_include_directories(jsrf_zeta_stream_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+        ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_link_libraries(jsrf_zeta_stream_test PRIVATE xboxrecomp)
+    foreach(_case IN LISTS ZETA_STREAM_CASES)
+        add_test(NAME jsrf_zeta_stream_${_case}
+                 COMMAND jsrf_zeta_stream_test --case ${_case})
+        set_tests_properties(jsrf_zeta_stream_${_case} PROPERTIES TIMEOUT 120)
+    endforeach()
+    else()
+        message(STATUS "jsrf_zeta_stream_* (the NV2A per-zeta depth committed-stream gate) is not "
+                       "registered off Windows -- it drives the Win32 guest-memory layout and "
+                       "the commit consumer, as jsrf_x8alias_stream_* does")
+    endif()
     # This one runs the pushbuffers through the Direct3D 11 back end and exits 0 after printing
     # SKIP when it cannot create a device, which off Windows is always: a green no-op, so it is
     # not registered there (jsrf_gpu_backend_parity_vk is the Vulkan sibling that runs).
@@ -1293,6 +1319,46 @@ if(BUILD_TESTING)
         endif()
         else()
             message(STATUS "jsrf_x8alias_stream_vk_* is not registered off Windows -- its "
+                           "committed-stream fixture drives the Win32 guest-memory layout")
+        endif()
+        # ── NV2A depth per zeta address, the committed-stream gate's Vulkan half ────────────────
+        # As the x8alias half: the clears and batches the production executor built from the
+        # committed stream are captured at the back-end seam and handed unchanged to the production
+        # vb_clear / vb_draw (#included with XBR_VK_BACKEND); the pixel read back after vb_flip
+        # must equal the hand-derived literal, and the live depth images (g.depths) are counted.
+        set_source_files_properties(tests/test_zeta_stream_vk.c PROPERTIES
+            OBJECT_DEPENDS
+            "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c;${XBOXRECOMP_DIR}/src/video/nv2a_vk_rc_coverage.h")
+        if(WIN32)
+        add_executable(jsrf_zeta_stream_vk_test tests/test_zeta_stream_vk.c
+            tests/zeta_stream_fixture.c)
+        add_dependencies(jsrf_zeta_stream_vk_test xbox_video)
+        target_include_directories(jsrf_zeta_stream_vk_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a ${XBOXRECOMP_DIR}/src/video
+            ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_zeta_stream_vk_test PRIVATE xboxrecomp ${CMAKE_DL_LIBS})
+        if(JSRF_VK_TEST_ICD)
+            file(TO_NATIVE_PATH "${JSRF_VK_TEST_ICD}" _vk_icd_zeta)
+            set(_zeta_vk_env
+                "VK_DRIVER_FILES=${_vk_icd_zeta};VK_ICD_FILENAMES=${_vk_icd_zeta};${JSRF_VK_TEST_SELECT};RECOMP_VK_PIPELINE_CACHE=off")
+            foreach(_case IN LISTS ZETA_STREAM_CASES)
+                add_test(NAME jsrf_zeta_stream_vk_${_case}
+                         COMMAND jsrf_zeta_stream_vk_test --case ${_case})
+                set_tests_properties(jsrf_zeta_stream_vk_${_case} PROPERTIES TIMEOUT 300
+                    SKIP_RETURN_CODE 77 ENVIRONMENT "${_zeta_vk_env}")
+            endforeach()
+        else()
+            foreach(_case IN LISTS ZETA_STREAM_CASES)
+                add_test(NAME jsrf_zeta_stream_vk_${_case}
+                         COMMAND jsrf_zeta_stream_vk_test --skip "XBR_VK_SW_ICD is not set")
+                set_tests_properties(jsrf_zeta_stream_vk_${_case} PROPERTIES TIMEOUT 20
+                    SKIP_RETURN_CODE 77)
+            endforeach()
+        endif()
+        else()
+            message(STATUS "jsrf_zeta_stream_vk_* is not registered off Windows -- its "
                            "committed-stream fixture drives the Win32 guest-memory layout")
         endif()
         # ── D4 Vulkan rc-refusal coverage, the real-device deciding gate ─────────────────────
