@@ -43,7 +43,10 @@ sphere-formula, eye-plane-object and texmat-enable-ignored. `--control texgen`
 runs those six in one owned root. The window-clip gate (tests/test_wclip_stream.c,
 tests/test_wclip_stream_vk.c, literals in tests/wclip_stream_cases.h) adds four:
 wclip-xmax-exclusive, wclip-aa-ignored, wclip-exclusive-as-inclusive and
-wclip-vk-ignored; `--control wclip` runs them. Vulkan cases need the software
+wclip-vk-ignored; `--control wclip` runs them. The LIN_X8R8G8B8 alias gate
+(tests/test_x8alias_stream*.c, tests/x8alias_stream_cases.h) adds four more,
+`--control x8`: x8-alias-identity-view, x8-self-identity-view,
+x8-swizzle-dropped and x8-cpu-alpha-kept. Vulkan cases need the software
 ICD, which the loader ignores in an elevated process, so from an elevated
 session run this script through `just controls <name>` (scripts/run-limited.py).
 
@@ -468,6 +471,57 @@ WCLIP_CONTROLS = {
 }
 CONTROLS.update(WCLIP_CONTROLS)
 
+# The LIN_X8R8G8B8 alias gate's controls: `x8_cases` are jsrf_x8alias_stream_*,
+# `x8_vk_cases` jsrf_x8alias_stream_vk_*.
+X8_CONTROLS = {
+    "x8-alias-identity-view": {
+        "title": "an aliased LIN_X8R8G8B8 target samples its identity view",
+        "edits": [
+            ("src/video/nv2a_vk_backend.c",
+             "return tx->color == 0x1E ? vb_image_view_one(&t->im) : t->im.view;",
+             "return t->im.view;"),
+        ],
+        "x8_vk_cases": ["x8_ff", "x8_rc"],
+        "x8_vk_markers": ["B upper-left triangle (4,4)"],
+        "x8_vk_still_green": ["x8_self", "a8_ff"],
+    },
+    "x8-self-identity-view": {
+        "title": "the self-sampling snapshot of a LIN_X8R8G8B8 target keeps its alpha",
+        "edits": [
+            ("src/video/nv2a_vk_backend.c",
+             "return tx->color == 0x1E ? vb_image_view_one(&t->copy) : t->copy.view;",
+             "return t->copy.view;"),
+        ],
+        "x8_vk_cases": ["x8_self"],
+        "x8_vk_markers": ["A drawn half, upper-left triangle (4,4)"],
+        "x8_vk_still_green": ["x8_ff", "x8_rc"],
+    },
+    "x8-swizzle-dropped": {
+        "title": "the alpha-one view keeps the identity alpha swizzle",
+        "edits": [
+            ("src/video/nv2a_vk_backend.c",
+             "vi.components.a = VK_COMPONENT_SWIZZLE_ONE;",
+             "vi.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;"),
+        ],
+        "x8_vk_cases": ["x8_ff", "x8_rc", "x8_self"],
+        "x8_vk_markers": ["B upper-left triangle (4,4)",
+                          "A drawn half, upper-left triangle (4,4)"],
+        "x8_vk_still_green": ["a8_ff", "a8_rc"],
+    },
+    "x8-cpu-alpha-kept": {
+        "title": "the CPU decoder keeps a LIN_X8R8G8B8 texel's stored alpha",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "*argb = ((const uint32_t *)p)[u] | 0xFF000000u;",
+             "*argb = ((const uint32_t *)p)[u];"),
+        ],
+        "x8_cases": ["x8_ff", "x8_rc"],
+        "x8_markers": ["B upper-left triangle (4,4)"],
+        "x8_still_green": ["a8_ff", "a8_rc"],
+    },
+}
+CONTROLS.update(X8_CONTROLS)
+
 # CTest prefixes for each case group, in the order the groups are run.
 RED_GROUPS = [
     ("cpu_cases", "cpu_markers", "jsrf_bumpenv_q_cpu_"),
@@ -478,6 +532,8 @@ RED_GROUPS = [
     ("texgen_vk_cases", "texgen_vk_markers", "jsrf_texgen_stream_vk_"),
     ("wclip_cases", "wclip_markers", "jsrf_wclip_stream_"),
     ("wclip_vk_cases", "wclip_vk_markers", "jsrf_wclip_stream_vk_"),
+    ("x8_cases", "x8_markers", "jsrf_x8alias_stream_"),
+    ("x8_vk_cases", "x8_vk_markers", "jsrf_x8alias_stream_vk_"),
 ]
 GREEN_GROUPS = [
     ("cpu_still_green", "jsrf_bumpenv_q_cpu_"),
@@ -487,6 +543,8 @@ GREEN_GROUPS = [
     ("texgen_vk_still_green", "jsrf_texgen_stream_vk_"),
     ("wclip_still_green", "jsrf_wclip_stream_"),
     ("wclip_vk_still_green", "jsrf_wclip_stream_vk_"),
+    ("x8_still_green", "jsrf_x8alias_stream_"),
+    ("x8_vk_still_green", "jsrf_x8alias_stream_vk_"),
 ]
 
 
@@ -685,7 +743,8 @@ def acquire_work_area(args, game, toolkit):
 TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test",
            "jsrf_bumpenv_stream_test", "jsrf_bumpenv_stream_vk_test",
            "jsrf_texgen_stream_test", "jsrf_texgen_stream_vk_test",
-           "jsrf_wclip_stream_test", "jsrf_wclip_stream_vk_test"]
+           "jsrf_wclip_stream_test", "jsrf_wclip_stream_vk_test",
+           "jsrf_x8alias_stream_test", "jsrf_x8alias_stream_vk_test"]
 
 
 def _is_link(path):
@@ -1046,7 +1105,7 @@ def run_control(name, workdir, shared_before, owned=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--control", default="all",
-                    choices=sorted(CONTROLS) + ["all", "texgen", "wclip"])
+                    choices=sorted(CONTROLS) + ["all", "texgen", "wclip", "x8"])
     ap.add_argument("--workdir", default=None,
                     help="private scratch directory to CREATE; it must not exist "
                          "yet (default: a fresh tmp-bumpenv-controls-<token> "
@@ -1095,6 +1154,8 @@ def _run_controls(args, owned):
         names = sorted(TEXGEN_CONTROLS)
     elif args.control == "wclip":
         names = sorted(WCLIP_CONTROLS)
+    elif args.control == "x8":
+        names = sorted(X8_CONTROLS)
     else:
         names = [args.control]
     ok = True
