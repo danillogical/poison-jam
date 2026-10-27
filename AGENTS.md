@@ -1,13 +1,31 @@
 # JSRF Windows recompilation: engineering guide
 
-## Orchestration
+## Working alone
 
-- **Codex agent (Plan Orchestrator):** use `$codex-omp-orchestrator` and its Codex
-  Plan Orchestrator reference.
-- **Primary OMP agent (Turn Orchestrator):** use `$codex-omp-orchestrator` and its
-  OMP Turn Orchestrator reference.
-- **Other OMP roles:** remain subagents and follow the skill's subagent guidance
-  within the Turn Orchestrator's assignment.
+- One agent works locally on the Windows laptop, in `C:\Users\logic\Repos\poison-jam` and
+  `C:\Users\logic\Repos\xboxrecomp`. No orchestration layer, bridge or subagent is required.
+- Read `plan-jsrf-gameplay.md` and take the first unblocked item of its **Work queue**. For an
+  item marked **[stronger model or owner]** or **[owner-assisted]**, report that it is next and
+  stop.
+- **Gate discipline for code changes:** follow the five rules at the top of the Work queue in
+  `plan-jsrf-gameplay.md` for every code item; they are not repeated here.
+- **Stop and ask the owner** for:
+  - force pushes or rewritten history;
+  - original assets or saves;
+  - an environment failing twice (ssh/socket `Operation not permitted`, an MSBuild "Checking
+    File Globs" stall after one `--parallel 1` retry, lavapipe);
+  - a shortcut that changes what a milestone means;
+  - anything compiled or translated at run time;
+  - any push: pushes need the owner's confirmation, after `just audit`;
+  - an owner-decided design point (see "Owner policy" in `docs/upstream-merge-playbook.md`).
+- **Commits:** unsigned, with no co-author or signature trailers. Stage with `git add <paths>`,
+  then `git commit -F <msgfile>`; do not use `git commit -- <paths>`, which trips a hook bug
+  (its `GIT_INDEX_FILE` leaks into `check-merge-structure.py`). Commit verified work before
+  ending a session.
+- The weekly upstream merge follows `docs/upstream-merge-playbook.md`; resolve conflicts toward
+  upstream's design.
+- Model, provider and effort settings (including the retired `.omp/config.yml`) are the owner's;
+  never change them.
 
 ## Project
 
@@ -17,8 +35,10 @@ the whole game. Work in small, verifiable milestones and explain defects with ev
 
 ## Start here
 
-1. Read `plan-jsrf-gameplay.md`: current execution authority, measured state and next task.
-2. Read `docs/jsrf-run-profiles.md`: strict, exploratory and fixture evidence rules.
+1. Read `plan-jsrf-gameplay.md`: current execution authority, measured state and its
+   **Work queue**; take the first unblocked item.
+2. Read `docs/jsrf-run-profiles.md`: strict, exploratory and fixture evidence rules. For the
+   weekly upstream merge, read `docs/upstream-merge-playbook.md`.
 3. Consult `docs/jsrf-technical-record.md`, `docs/jsrf-compatibility-ledger.md` and
    `config/stop-chain.json` for findings, shortcuts and runtime stops.
 4. Fetch both repositories and inspect HEAD, remotes, ahead/behind and working trees
@@ -27,7 +47,7 @@ the whole game. Work in small, verifiable milestones and explain defects with ev
 Keep the current plan accurate as evidence moves. Title and keyboard plans are
 historical records. Durable findings belong in the current plan, technical record,
 strict-horizon ledger or compatibility ledger; session reports and scratch notes stay
-outside the repository. OMP routing belongs in `.omp/config.yml`.
+outside the repository.
 
 ## Repositories and public safety
 
@@ -43,9 +63,9 @@ outside the repository. OMP routing belongs in `.omp/config.yml`.
   lifted code, Xbox BIOS/MCPX/HDD assets, secrets or blobs over 100 MB.
 
 Commit durable verified work as it lands; never leave finished work uncommitted across
-a session boundary. Push at useful checkpoints and closure. When both repositories
-have outgoing work, push toolkit first, then game: game records cite toolkit commits.
-An unchanged, synchronized repository needs no new commit or push.
+a session boundary. Push only with the owner's confirmation, after `just audit`. When both
+repositories have outgoing work, push toolkit first, then game: game records cite toolkit
+commits. An unchanged, synchronized repository needs no new commit or push.
 
 Before every push, verify the tree is clean, the branch/commit is the intended durable
 state, the destination is `origin`, and the update is a fast-forward. Code needs its
@@ -98,7 +118,8 @@ empty vertex-program corpus under `build/empty-corpus`
 executor's CPU interpreter. A capability-off build therefore needs no corpus, no
 `dxc` and no `VULKAN_SDK`; `just shaders` itself still does.
 
-Windows-only host tools, usable from the elevated ssh session (no external scratch scripts):
+Windows host tools, the documented way to run un-elevated Vulkan tests, audits and controls
+(no external scratch scripts):
 `just limited -- <cmd>` runs any command un-elevated (the Vulkan loader ignores
 `VK_DRIVER_FILES` when elevated, so llvmpipe tests need it); `just ctest-limited [ctest
 args]` (a `-R` containing `|` is refused); `just controls <control>` runs the bump/texgen

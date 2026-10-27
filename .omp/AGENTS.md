@@ -1,3 +1,5 @@
+> OMP routing is retired for this repository since 2026-10-23; the repository's `AGENTS.md` is authoritative.
+
 # OMP execution policy
 
 - Plan at the start of every substantive engineering session using the configured

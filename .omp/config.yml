@@ -1,3 +1,4 @@
+# OMP routing is retired for this repository since 2026-10-23; the repository's `AGENTS.md` is authoritative.
 # Override only the planner; inherit all other routing and fallbacks globally.
 modelRoleStorage: project
 modelRoles:
