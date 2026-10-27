@@ -8414,3 +8414,40 @@ e2e runs; the final Garage snapshot matches `20261026-123133-068-keyscript-d4s6-
 **What it does not prove.** The character-select panels themselves: the e2e route does not reach
 character select, so no frame shows the fix. Union semantics have no stream gate (slots 1-7 are not
 admitted). Clear behaviour under a window clip was not examined.
+
+### §31.86 — Q3 (N6b): an aliased LIN_X8R8G8B8 render target reads alpha 1 (2026-10-26 to 2026-10-27)
+
+**Defect.** A texture whose format is LIN_X8R8G8B8 (`0x1E`) must read alpha 1 whatever the stored
+top byte holds. The CPU executor (`sample_tex`, `case 0x1E`) and Vulkan's normal uploads (through
+`nv2a_backend_decode_texture`) already forced `0xFF`. But when a texture's offset and pitch match a
+live render target, `vb_tex_aliases` accepts `0x12` and `0x1E` alike, and `vb_texture` sampled the
+target's own B8G8R8A8 view (or the self-sampling snapshot), so the stored alpha leaked through.
+
+**Gate (game `0d606cf`, committed before the fix by a different worker).**
+`jsrf_x8alias_stream_{x8_ff,a8_ff,x8_rc,a8_rc,x8_self}` and their `_vk_` halves: a target cleared
+to `0x40336699` is sampled as `0x1E` (and `0x12` as the control) through the fixed-function path, the
+combiner path and the self-sampling snapshot; the Vulkan half also asserts the alias and copy
+counters. On toolkit `88fedc4` the CPU half passed 5/5 and the Vulkan `x8_*` cases failed on every
+probe with alpha `0x40` where `0xFF` was due; the `a8_*` controls passed.
+
+**Fix (toolkit `1df8bb7`).** `vb_texture` samples, for `0x1E` only, a lazily made view of the same
+image (`VbImage.one`, from `vb_view_create`) with `components.a = VK_COMPONENT_SWIZZLE_ONE`, for the
+target and for its snapshot. The view is freed with its image (`vb_image_discard` → garbage). A
+portability-subset device without `imageViewFormatSwizzle` keeps the identity view and logs once
+(L85).
+
+**Verification.** Gate 10/10. `just controls x8` RESULT: PASS (`x8-alias-identity-view`,
+`x8-self-identity-view`, `x8-swizzle-dropped`, `x8-cpu-alpha-kept`, each RED on its named probe and
+GREEN restored). `just build` with no warnings in the backend, `just check`, full `just ctest-limited`
+261/261 with none skipped. `just tk-tests`: everything as `tests/FORK-STATUS.md` expects except the
+known `xbox_guest_meter` flake (Q13; this time inside `kernel_eeprom_settings`, 1 of 4 reruns
+failed). Strict smoke `20261027-000426-145-x8-smoke` (guest entry, checkpoints passed). Vulkan e2e
+`20261027-000540-835-keyscript-e2e-vk-x8` (560 s, exploratory): icall 0, fatal 0, 1,136,945 draws,
+`rt_aliases=9766` over 9,767 flips (the per-frame composite goes through the changed path),
+`rt_copies=0`, `validation_errors=0`, `dropped_tris=8`; the Garage gameplay snapshot renders as in
+`20261026-224321-618-keyscript-e2e-vk-wclip`.
+
+**What it does not prove.** Whether the per-frame composite samples as `0x1E` or `0x12` (the
+counters do not split by format), so no in-game picture change is claimed. The D3D11 reference has
+the same alias rule (`nv2a_d3d11_backend.c:1110`) and still reads the stored alpha (L85; no new D3D11
+work).

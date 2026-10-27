@@ -20,7 +20,9 @@ owns shortcuts; `config/stop-chain.json` owns stops.
   only.
 - 2026-10-26, Q2 (N6a): the window clip is a scissor (toolkit `88fedc4`, game gate `c0c4d61`, TR
   §31.85, L84); local, not pushed.
-- The next item is Q3, LIN_X8R8G8B8 alpha.
+- 2026-10-27, Q3 (N6b): an aliased LIN_X8R8G8B8 render target reads alpha 1 (toolkit `1df8bb7`,
+  game gate `0d606cf`, TR §31.86, L85); local, not pushed.
+- The next item is Q4, one depth surface per zeta.
 - Older dated status paragraphs and the pre-approved R1-R5/N-series text moved to
   `docs/jsrf-operating-history.md`, section "Plan history moved on 2026-10-26".
 
@@ -79,6 +81,7 @@ Milestone names with their TR sections; details are in the TR.
 - **xboxrecomp v0.16.0 catch-up** (TR §31.83).
 - **D4 steps 6-7:** texgen and texture matrices, closing records (TR §31.84, L75-L83).
 - **Q2 (N6a):** the window clip is a scissor (TR §31.85, L84).
+- **Q3 (N6b):** an aliased LIN_X8R8G8B8 render target reads alpha 1 (TR §31.86, L85).
 
 ## Work queue (after the 2026-10-26 handoff)
 
@@ -122,7 +125,6 @@ cheap agent should not start them; it should report that they are next and stop.
 | # | Item | Size | Gate | Stop and ask if |
 |---|---|---|---|---|
 | Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md`. If `HEAD..upstream/main` is empty, add a dated "no upstream change" line to Current state and take the next item. | 1–2 sessions | the playbook's gates | any playbook stop condition |
-| Q3 | **N6b: a render target sampled as LIN_X8R8G8B8 reads alpha 1** (jsrf-recomp G54). Toolkit decoder / Vulkan sampler format. | 1 | CPU and Vulkan fixture literals with alpha 0xFF; old-red | the CPU decoder disagrees with Vulkan before the change |
 | Q4 | **N6c: one depth surface per zeta.** Add a test proving the Vulkan back end keys depth by zeta address (L62). | 1 | a fixture with two zetas; a mutation control that shares them | production is wrong (report it, don't fix it) |
 | Q5 | **N6d / lighting: the fixed-function infinite-light sign** (`max(0, dot(N, L))`) **and the `lit_color` normal** (TR §31.84: it uses the model-view, not the inverse, always normalizes and back-face flips, L82). **[stronger model or owner]** | 1–2 | xemu `vsh-ff.c` lighting rules, a literal gate like the texgen gate | always: the rules need derivation |
 | Q6 | **The upstream guest-CPU gate hangs at boot** (TR §31.83: `KeInsertQueueDpc`/`KeSetEvent` spin, no title in 300 s). Diagnose it before serial mode (L34) can retire. **[stronger model or owner]** | 1–2 | an exploratory e2e reaching the title with `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1` | always |
