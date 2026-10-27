@@ -86,9 +86,19 @@ the owner's confirmation, after `just audit`.
    without editing the test.
 2. Use literal expected values with their derivation written in a comment. Two renderers agreeing
    decides nothing.
-3. Old-red: build the new test against the previous toolkit commit in a private clone (see TR §31.84
-   for the recipe), and require failures on NAMED assertions. A compile failure or a skip is not
-   evidence.
+3. Old-red: build the new test against the previous toolkit commit in a private clone, and require
+   failures on NAMED assertions. A compile failure or a skip is not evidence. Recipe (scratch outside
+   both repos and outside `%TEMP%`, e.g. `C:\Users\logic\xbr-mac\<name>`):
+   - `git clone --no-hardlinks C:\Users\logic\Repos\xboxrecomp <scratch>\tk`, then
+     `git -C <scratch>\tk checkout <previous-commit>`;
+   - `cmake -S . -B <scratch>\build -DCMAKE_BUILD_TYPE=Release -DXBOXRECOMP_DIR=<scratch>\tk
+     -DBUILD_TESTING=ON -DJSRF_FIXTURES_ONLY=ON -DXBR_VK_SW_ICD=<XBR_VK_SW_ICD from build\CMakeCache.txt>`
+     from the game root, then `cmake --build <scratch>\build --config Release --target <test targets>`;
+   - CPU cases: `ctest --test-dir <scratch>\build -C Release -R ^<prefix> --output-on-failure`;
+     Vulkan cases: `python -X utf8 scripts\ctest-limited.py --build-dir <scratch>\build -R ^<prefix>`;
+   - if the test needs a struct field the old toolkit lacks, keep the new header and check out only
+     the old behaviour files (`git -C <scratch>\tk checkout <previous-commit> -- <files>`), as TR
+     §31.82 did; then delete `<scratch>`.
 4. Add at least one private mutation control: an entry in the `CONTROLS` table of
    `scripts/bumpenv-q-controls.py` (exact text edits, the cases that must go RED and their named
    assertions; `--control` choices come from the table). `just controls <name>` must go RED, then
