@@ -47,6 +47,12 @@ RECOMP_TLS int g_df;
 ptrdiff_t g_xbox_mem_offset;
 uint32_t g_xbox_code_lo, g_xbox_code_hi;
 
+/* The lifted back-edge hooks' runtime, inert: no serial mode and no guest-CPU lock here. */
+volatile int g_xbox_guest_serial_on;
+int32_t g_xbox_guest_cpu_preempt;
+void xbox_GuestSerialYield(void) {}
+void xbox_GuestCpuPreempt(uint32_t va) { (void)va; }
+
 RECOMP_TLS volatile uint32_t g_icall_trace[ICALL_TRACE_SIZE];
 RECOMP_TLS volatile uint32_t g_icall_trace_idx;
 RECOMP_TLS volatile uint64_t g_icall_count;

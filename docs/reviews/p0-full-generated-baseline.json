@@ -6,7 +6,7 @@
   "src/recomp/gen/recomp_0002.c": "0bb61bb49bafc2eace8de9d6ec8bd2b0a4361d8ad58f8b5a3608024eeef7321a",
   "src/recomp/gen/recomp_0003.c": "a38d459a8e5224fc617be75268db98cf56d0b90cbc6d97859dbe6e9f2ac6926e",
   "src/recomp/gen/recomp_0004.c": "e9153552f66769a0361fc359ed76f3bd8275b08036c021cc818b8e1c909b4c67",
-  "src/recomp/gen/recomp_0005.c": "640d1f48e02a721cb6cedcd5a30cb25b5aef0dc6522d9236f54f198e5d70c623",
+  "src/recomp/gen/recomp_0005.c": "8208752ac3c9703841def202c7b7356657e746a015439efd8f8906cfadf78bcb",
   "src/recomp/gen/recomp_abi_deltas.c": "7539102510eaec0245d4a2f2ce79a9030739795b0705964f5e1b21ab8762b435",
   "src/recomp/gen/recomp_dispatch.c": "4fce108430be97e980c52505e1ed09a0e275b32b2376f1df6a2cf3932ed50cff",
   "src/recomp/gen/recomp_funcs.h": "6716815d1986d3b896c7efd13b64946b752e47e681f85f69dd3d99d176c55ab5",
@@ -14,8 +14,8 @@
   "src/recomp/gen/recomp_types.h": "edc184333db517bfd74a752b4d177828659db62e72f34811daff86cc1ef3b720",
   "src/recomp/gen/shaders/nv2a_vsh_programs.c": "ca6677fda89b6e60d32e76ea277c6cb46665c0454fce1698a959e93635debd27",
   "src/recomp/gen/shaders/nv2a_vsh_programs.h": "12d5445b2cc50cf03632f29ccd9e270cb209b9059b92d6623344bdd0f2786edd",
-  "src/recomp/recovered/recovered.c": "5e2b356985ddc8edaf7436852cba2bc413632bfb05f7250a7e1cac1df2970f58",
-  "src/recomp/recovered/recovered_11c1_test.c": "1986aac2eecbc93748c3677d9fea752e6bbd2179a14a4eb75fac20a7f14cc437",
+  "src/recomp/recovered/recovered.c": "f40542a55d07d43be92faa52641e24d845b9062df12fe408c8d6e64f075a8a2f",
+  "src/recomp/recovered/recovered_11c1_test.c": "3f87cbf1a48eec9450ae1641d2d1d89d5d25d013c2a057ca2935f62a7c05f2c7",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -871,6 +871,15 @@
     "src/recomp/gen/shaders/nv2a_vsh_programs.h"
    ],
    "reason": "Q11 (R5): the vertex-program corpus moved only in its recorded translator-source and tool hashes; program bytes identical (gen-shaders.py --check byte-identical)"
+  },
+  {
+   "date": "2026-10-28",
+   "files": [
+    "src/recomp/gen/recomp_0005.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Q6: lifting scripts emit RECOMP_BACK_EDGE (backedge_yield=True); only hook insertions changed"
   }
  ]
 }

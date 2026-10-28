@@ -8,7 +8,7 @@
   "src/recomp/gen/recomp_0002.c": "0bb61bb49bafc2eace8de9d6ec8bd2b0a4361d8ad58f8b5a3608024eeef7321a",
   "src/recomp/gen/recomp_0003.c": "a38d459a8e5224fc617be75268db98cf56d0b90cbc6d97859dbe6e9f2ac6926e",
   "src/recomp/gen/recomp_0004.c": "e9153552f66769a0361fc359ed76f3bd8275b08036c021cc818b8e1c909b4c67",
-  "src/recomp/gen/recomp_0005.c": "640d1f48e02a721cb6cedcd5a30cb25b5aef0dc6522d9236f54f198e5d70c623",
+  "src/recomp/gen/recomp_0005.c": "8208752ac3c9703841def202c7b7356657e746a015439efd8f8906cfadf78bcb",
   "src/recomp/gen/recomp_abi_deltas.c": "7539102510eaec0245d4a2f2ce79a9030739795b0705964f5e1b21ab8762b435",
   "src/recomp/gen/recomp_dispatch.c": "4fce108430be97e980c52505e1ed09a0e275b32b2376f1df6a2cf3932ed50cff",
   "src/recomp/gen/recomp_funcs.h": "6716815d1986d3b896c7efd13b64946b752e47e681f85f69dd3d99d176c55ab5",
@@ -16,20 +16,20 @@
   "src/recomp/gen/recomp_types.h": "edc184333db517bfd74a752b4d177828659db62e72f34811daff86cc1ef3b720",
   "src/recomp/gen/shaders/nv2a_vsh_programs.c": "ca6677fda89b6e60d32e76ea277c6cb46665c0454fce1698a959e93635debd27",
   "src/recomp/gen/shaders/nv2a_vsh_programs.h": "12d5445b2cc50cf03632f29ccd9e270cb209b9059b92d6623344bdd0f2786edd",
-  "src/recomp/recovered/recovered.c": "5e2b356985ddc8edaf7436852cba2bc413632bfb05f7250a7e1cac1df2970f58",
-  "src/recomp/recovered/recovered_11c1_test.c": "1986aac2eecbc93748c3677d9fea752e6bbd2179a14a4eb75fac20a7f14cc437",
+  "src/recomp/recovered/recovered.c": "f40542a55d07d43be92faa52641e24d845b9062df12fe408c8d6e64f075a8a2f",
+  "src/recomp/recovered/recovered_11c1_test.c": "3f87cbf1a48eec9450ae1641d2d1d89d5d25d013c2a057ca2935f62a7c05f2c7",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "8a6cf3951346aadfddb11e8f543e2c55f9de25ea",
+   "revision": "7c626e2a4eeffb5a72d66069ce2978b1d056f367",
    "state": "MEASURED",
-   "status_sha256": "6facda9662cc468bdd6980fcfb17cee4fa5ac8f66f63d34ab401eae4092f0292"
+   "status_sha256": "518659ea3e60afe6b04baf3cb230c4f2a6af2d3d5361fc83626ad74e36840e2d"
   },
-  "scripts/recover-functions.py": "4bb63b1342e57992e4bb57041d688cc68780a80dcdc1b1d671b5ccf620d025d0",
-  "scripts/relift-selected.py": "8175bc61ae19a244da396fd3d3a1a9d9379383046d04fc6f45b1d57c77a30c18",
+  "scripts/recover-functions.py": "d5649dcaae1039733cba1c122a69ea1d3cbf531d324230105a3b5fea7804151b",
+  "scripts/relift-selected.py": "ac850d3327b4e1fa68488e466a0c86c06caca36b3634cc351dd6cb218dee99c2",
   "toolkit": {
    "dirty": false,
    "revision": "ebf62bbbd0c9deea24e96888c32c689fc95d7072",
@@ -1690,6 +1690,17 @@
    "inputs_changed": [],
    "generator_changed": "toolkit src/video/nv2a_vsh_hlsl.h and src/video/nv2a_vsh_hlsl_tool.c (the input-mask rule moved into one shared inline function; no semantic change)",
    "cause": "Q11 (R5): only the corpus's recorded provenance changed (source.nv2a_vsh_hlsl.h, source.nv2a_vsh_hlsl_tool.c and tool.sha256, six header lines across nv2a_vsh_programs.c/.h); every program byte is identical to the previous corpus (line diff), and gen-shaders.py --check reports byte-identical output for 128 programs, 126 distinct, 0 collisions."
+  },
+  {
+   "command": "game: python -X utf8 scripts/relift-selected.py boundaries; python -X utf8 scripts/recover-functions.py; python -X utf8 scripts/gen-abi-deltas.py (no full pass, no disasm rerun)",
+   "date": "2026-10-28",
+   "inputs_changed": [
+    "scripts/recover-functions.py",
+    "scripts/relift-selected.py",
+    "scripts/repair-hidden-entries.py"
+   ],
+   "generator_changed": "the game's lifting scripts now pass backedge_yield=True to FunctionTranslator, as the full pass's --backedge-yield does",
+   "cause": "Q6: upstream's guest-CPU lock hands over only at kernel calls and RECOMP_BACK_EDGE hooks, and the recovered and relifted output had none, so JSRF's spin loop at 0x13B190 (in recovered 0x13B180) held the CPU and boot stopped at the third thread. Only hook insertions changed: recovered.c +1371 RECOMP_BACK_EDGE (3 of them before existing RECOMP_JUMP_TRAPs), recomp_0005.c +2 (relifted boundaries), recovered_11c1_test.c +56; scripts/check-back-edges.py reports 4973 back edges, all hooked."
   }
  ]
 }

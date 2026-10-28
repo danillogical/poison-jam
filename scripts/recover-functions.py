@@ -34,7 +34,7 @@ for entry in entries:
         'name':f'sub_{address:08X}','confidence':1.0,'detection_method':'reviewed_runtime_target',
         'has_prologue':False,'calls_to':[],'called_by':[]}
 labels={int(v['address'],16):v['name'] for v in json.loads((root/'tools/disasm/output/labels.json').read_text())}
-translator=FunctionTranslator(data,database,labels)
+translator=FunctionTranslator(data,database,labels,backedge_yield=True)
 # A jump to an entry with its own symbol is a tail call. Without the full pass's
 # view the lifter takes every tail_jump_alias target as folded, emits a goto it
 # cannot resolve, and the validator deletes the jump.

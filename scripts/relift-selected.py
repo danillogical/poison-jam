@@ -32,7 +32,7 @@ for existing in (root/'src/recomp/gen').glob('recomp_*.c'):
         if a in db:db[a]['name']=m[2]
 for a,name in json.loads((root/'config/manual-functions.json').read_text()).items():
     if int(a,16) in db:db[int(a,16)]['name']=name
-t=FunctionTranslator(data,db,labels)
+t=FunctionTranslator(data,db,labels,backedge_yield=True)
 mode=sys.argv[1]
 assert mode in ('atomics','wide-string-compare','boundaries','trace','fcmov','comiss')
 # A targeted guest-call trace.
@@ -64,7 +64,7 @@ if mode=='trace':
                     db[start]={'_addr':start,'start':f'0x{start:08X}','end':end,'size':size,
                         'name':name,'confidence':1.0,'detection_method':'generated_body',
                         'has_prologue':False,'calls_to':[],'called_by':[]}
-        t=FunctionTranslator(data,db,labels,trace_functions=trace_addresses)
+        t=FunctionTranslator(data,db,labels,trace_functions=trace_addresses,backedge_yield=True)
     unknown=[f'0x{a:08X}' for a in sorted(trace_addresses) if a not in db]
     if unknown: raise RuntimeError('not in the function database: '+', '.join(unknown))
 # Same callable view as the full pass, read back from its chunks; see

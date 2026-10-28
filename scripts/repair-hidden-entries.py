@@ -349,7 +349,7 @@ def verify(repairer, repaired, additions):
                     'name': 'sub_%08X' % item['start'], 'confidence': 1.0,
                     'detection_method': 'reviewed_runtime_target',
                     'has_prologue': False, 'calls_to': [], 'called_by': []}
-                translator = FunctionTranslator(data, probe, labels)
+                translator = FunctionTranslator(data, probe, labels, backedge_yield=True)
                 code = translator.translate_function(item['start'], probe[item['start']])
                 if not code or '/* TODO:' in code:
                     problems.append('addition 0x%08X does not lift standalone'
