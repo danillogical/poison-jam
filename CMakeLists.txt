@@ -2402,6 +2402,14 @@ if(BUILD_TESTING)
         COMMAND ${JSRF_PYTHON} -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_aot_provenance.py)
     # It takes about 60 s alone and over 120 s beside the rest of the suite.
     set_tests_properties(jsrf_vsh_aot_provenance PROPERTIES TIMEOUT 300)
+    # The input-mask rule's Python copy (find-vertex-programs.py) against the host tool's, which
+    # shares the interpreter's single C definition.  Needs the built tool and nothing else.
+    if(TARGET nv2a_vsh_hlsl)
+        add_test(NAME jsrf_vsh_mask_rule
+            COMMAND ${JSRF_PYTHON} -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_mask_rule.py
+                    "$<TARGET_FILE:nv2a_vsh_hlsl>")
+        set_tests_properties(jsrf_vsh_mask_rule PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+    endif()
     # R2's gating test: the corpus seam of a build WITHOUT the Vulkan toolchain.  Registered
     # UNCONDITIONALLY, and deliberately so: it is the gate of the branch that exists BECAUSE
     # the capability can be OFF, and gating it on XBR_VULKAN_FOUND would leave exactly that

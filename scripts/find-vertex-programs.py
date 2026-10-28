@@ -46,7 +46,12 @@ def field(ins, dw, lo, width):
 
 
 def program_info(words):
-    """Mirror of nv2a_vsh_interp.c decode_program for a program starting at slot 0."""
+    """Mirror of nv2a_vsh_interp.c decode_program for a program starting at slot 0.
+
+    The input-mask rule is nv2a_vsh_ins_input_mask in toolkit src/video/nv2a_vsh_hlsl.h; this copy
+    stays because a scan tries thousands of candidates, and tests/test_vsh_mask_rule.py pins it to
+    the host tool.
+    """
     h, inputs, writes_c, opos, n = 2166136261, 0, 0, 0, 0
     for ins in words:
         for w in ins:
