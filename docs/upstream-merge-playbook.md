@@ -140,7 +140,7 @@ Clear stale analysis JSON first. Keep the disasm settings identical to last time
 2. `just check`.
 3. `just ctest-limited --output-on-failure`: the full limited CTest (241 tests on 2026-10-26; the
    count grows, and any failure or skip is the gate). Never use `|` in `-R`.
-4. All D4 and Q gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`, `jsrf_wclip_stream_*`, `jsrf_x8alias_stream_*`, `jsrf_zeta_stream_*`, `jsrf_light_stream_*`.
+4. All D4 and Q gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`, `jsrf_wclip_stream_*`, `jsrf_x8alias_stream_*`, `jsrf_zeta_stream_*`, `jsrf_light_stream_*`, `jsrf_spec_stream_*`.
 
 ## 11. Runtime acceptance
 
@@ -199,6 +199,8 @@ Where our deltas live. Each is a candidate to propose upstream or to delete.
 - `e10087e`: fixed-function lighting transforms the normal by the inverse model-view rows, normalizes
   it only under NORMALIZATION_ENABLE (`0x03A4`) and normalizes an infinite light's direction (TR
   §31.88). The retained per-vertex facing-away flip (L82) is not proposed: xemu has no such flip.
+- `d02ed03`: fixed-function oD1 routing (`ff_specular`: lit oD1 = (0,0,0, attribute-4 alpha), SPECULAR_ENABLE off
+  forces (0,0,0,1), non-separate specular passes attribute 4); no per-light pf term (TR §31.90, L87).
 - Not proposed: the texgen helper `cf185d0` is deliberately self-contained.
 
 **Delete after the next regeneration**

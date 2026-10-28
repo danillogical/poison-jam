@@ -8768,3 +8768,76 @@ exactly `jsrf_spec_stream_vk_lit_d1_spec_off` and `jsrf_spec_stream_vk_lit_d1_nl
 on their named pixel assertions, and none were skipped (293 total). This is the expected red
 gate state, not an all-green suite or a completed Q5b implementation. The private clone/build
 was removed after verifying its exact owned path, clean state and pinned revision.
+
+Corrected in §31.90: xemu `5c516ff0` (2026-10-17) supersedes the pinned pf form; the gate's literals are unaffected.
+
+### §31.90 — Q5b stage 2: fixed-function oD1 routing (2026-10-28)
+
+**What.** Stage 2 implements the decided subset against §31.89's gate without editing it. The per-light
+`pf` term stays unimplemented (L87).
+
+**Correction to §31.89.** Its derivation is pinned to xemu `478b4f49` (2026-09-29). xemu later changed
+the specular term: commit `5c516ff0` (2026-10-17, "nv2a: Fix specular param handling") "removes the
+curve fitting approximation added by PR #2079 and implements the calculation described in
+https://patents.google.com/patent/US6417851B1/en that is likely used in hardware", citing
+nxdk_pgraph_tests `specular_tests.cpp` and its hardware golden results
+(https://abaire.github.io/nxdk_pgraph_tests_golden_results/results/Specular/index.html). Master's rule:
+`pf = 0; if (nDotVP > 0 && nDotHV > -L) { denom = M*nDotHV + N; if (denom == 0) pf = 10000; else if
+(denom > 0) pf = clamp((nDotHV + L)/denom, 0, 10000); }`, with (L, M, N) = SET_SPECULAR_PARAMS,
+`nDotHV = max(0, dot(n, H))`, and H the infinite half vector or `normalize(L + VPeye)` under LOCALEYE.
+So §31.89's statements (a) and (b) ("NOT the ratio form", "no 10000 clamp") hold for the pin only; the
+packet sketch's ratio and clamp were right for master. xemu `04f12b57` (same day) also fixed the
+material colour source for ambient and emissive. None of the gate's committed literals depends on the
+pf formula (R1 is forced by SPECULAR_ENABLE off; R2 has N.L <= 0, so pf = 0 under both forms), so the
+gate stands unchanged; only the V2 note, P1 and P3 in `tests/spec_stream_cases.h` cited the stale form
+and are now comment-corrected. §31.89's text is left as written.
+
+**Change (toolkit `d02ed03`, controls game `cd3dd38`).** `ff_specular` in `src/kernel/nv2a_pb_exec.c`
+(called from `backend_vertex_extra`; `lit_applies()` factored out of `lit_color`):
+
+- lit: oD1 = (0, 0, 0, attribute-4 alpha);
+- SPECULAR_ENABLE (`0x03B8`) off: oD1 = (0, 0, 0, 1), lit or not;
+- SPECULAR_ENABLE on with SEPARATE_SPECULAR (`0x0294` bit 0) off: oD1 = attribute 4 (the lit rgb it
+  would add into oD0 is 0);
+- no per-light pf term: `0x09E0..0x09F4` are not admitted.
+
+JSRF facts for the omitted term: light 0 specular colour is 0 (witness run
+`20261008-001451-422-title008-witness-0298`), LIGHT_CONTROL is `0x00020001` (separate on, bit 17 set),
+SPECULAR_ENABLE is 0 at the title (`docs/jsrf-nv2a-method-inventory.md`).
+
+**Gate.** The two stage-1 reds, `jsrf_spec_stream_vk_lit_d1_spec_off` and
+`jsrf_spec_stream_vk_lit_d1_nl_negative`, are now green; no literal changed.
+
+**Verification.** `jsrf_spec_stream_*`: 5/5 CPU and 5/5 Vulkan. `jsrf_light_stream_*`: 7/7 and 7/7.
+`just controls spec` RESULT: PASS: `spec-pass-through` RED on `lit_d1_spec_off` and
+`lit_d1_nl_negative`; `spec-lit-ignored` RED on `lit_d1_nl_negative`; `spec-unlit-zeroed` RED on
+`pc_unlit_d1`; each GREEN restored. `just build`, `just check`, full `just ctest-limited` 293/293 with
+none skipped, and `just tk-tests` ok. Full CTest is all green again.
+
+**Runtime.**
+- *Strict smoke* `20261028-121418-139-spec-smoke`: `diagnostic_deadline` at 75.10 s (bounded capture
+  only), checkpoints passed, 14 native threads, 140 named frames, 1 GPU snapshot, save root verified,
+  exe SHA-256 prefix `eadbfd79…d0d7f0`, stop 2026-10-28 19:16:40.2 UTC.
+- *Vulkan e2e* `20261028-121534-206-keyscript-e2e-vk-spec` (560 s, exploratory): icall 0, fatal 0,
+  1,141,324 draws, `rc_draws` 586,502, `rc_fallback` 0, `validation_errors` 0, `dropped_tris` 8. The
+  vandalism-warning 2D screen and the Garage gameplay snapshot (about 375 s) match
+  `20261027-000540-835-keyscript-e2e-vk-x8`. No visible change is claimed.
+
+**What it does not prove.** Hardware fidelity, or any in-game change. The per-light pf term (P1, P3),
+LOCALEYE, LIGHT_CONTROL bit 17 and the colour-material specular source (P4, P6, P7) are not
+implemented. Lit batch frequency in retail streams is still UNKNOWN. Agreement between the two
+renderers proves nothing, because the executor computes the vertex colour for both.
+
+**State.** Stages 1 and 2 are done locally; nothing is pushed. Q5b stays open for stage 1b: a witness
+run for `0x09E0..0x09F4` (`RECOMP_NV2A_ADMIT_UNKNOWN=1`, L44). If JSRF never submits them, Q5b closes
+with the pf term ledgered (L87).
+
+**Stage 1b: the witness (2026-10-28).** Exploratory Vulkan e2e
+`20261028-122913-801-keyscript-e2e-vk-admit` (560 s, stock `e2e.json`, `RECOMP_NV2A_ADMIT_UNKNOWN=1`
+recorded in `metadata.json`; icall 0, fatal 0) logged no `[NV2A] RECOMP_NV2A_ADMIT_UNKNOWN` banner and
+no `[PFIFO] admit-unknown` line: the walk met no method outside the table on this route, so JSRF
+never submitted `SET_SPECULAR_PARAMS` (`0x09E0..0x09F4`) there. The same script's D4 coverage run
+(§31.62) counted 71,335 lit specular batches, so the route does exercise specular lighting. This is
+one route, not whole-game absence. With light 0's specular colour 0 as well, the omitted pf term
+contributes nothing in observed JSRF state. **Q5b is closed**; the pf term stays ledgered (L87) until
+a run witnesses the parameters.

@@ -27,19 +27,16 @@ owns shortcuts; `config/stop-chain.json` owns stops.
 - 2026-10-27, Q5a: fixed-function lighting takes the normal from the inverse model-view rows,
   normalizes it only when enabled, and normalizes an infinite light's direction (toolkit `e10087e`,
   game gate `f8caed0`, controls `a3bf182`, TR §31.88, L82); local, not pushed.
-- 2026-10-28, Q5b stage 1 (derivation and gate only; **Q5b stays IN PROGRESS**): the specular rule
-  was re-derived line by line from pinned xemu `478b4f49` and three of the packet sketch's
-  statements did not survive — the term is `pow(nDotHV, specularPower)`, not a
-  `(N.H+L)/(M*N.H+N)` ratio, and no 10000 clamp exists in the pin. The committed gate is
-  `636a808` (`tests/spec_stream_*` plus its CMake registration; TR §31.89, L87); nothing is
-  pushed. Exactly two named tests are RED on pinned toolkit `e10087e` and must stay unchanged:
-  `jsrf_spec_stream_vk_lit_d1_spec_off` and `jsrf_spec_stream_vk_lit_d1_nl_negative`, both reading
-  `0xBFFF00FF` where `0xBF000000` is due. **Full CTest is expected to show exactly these 2 failures
-  until stage 2**, so read this line alongside gate rule 5 and the merge playbook's all-green gate;
-  the other 8 new tests pass, and Q5a's 14 stay green. `0x09E0..0x09F4` are still unadmitted, so
-  the parameter-dependent cases are PENDING behind a runtime witness.
-- The next item is Q5b stage 2, **[stronger model or owner]**: implement the decided subset without
-  editing the gate. Stage 1b (admitting `0x09E0..0x09F4` from a witness) is blocked on that witness.
+- 2026-10-28, Q5b stages 1 and 2 are done (gate `636a808`, toolkit `d02ed03`, controls `cd3dd38`; TR
+  §§31.89-31.90, L87); local, not pushed. Stage 2 routes fixed-function oD1 (lit gives (0,0,0,
+  attribute-4 alpha), SPECULAR_ENABLE off gives (0,0,0,1), non-separate specular passes attribute 4)
+  and the two stage-1 reds are green. Correction (TR §31.90): the stage-1 pf derivation is pinned to
+  xemu `478b4f49`, which xemu `5c516ff0` (2026-10-17) supersedes with a ratio form and a 10000 clamp;
+  no committed literal depends on it. Full CTest is all green again (293/293, none skipped).
+- 2026-10-28, Q5b stage 1b: the admit-unknown e2e `20261028-122913-801-keyscript-e2e-vk-admit` met no
+  unadmitted method, so JSRF never sent `SET_SPECULAR_PARAMS` on that route; Q5b is closed with the pf
+  term ledgered (TR §31.90, L87).
+- The next item is Q6, which is marked [stronger model or owner].
 - Older dated status paragraphs and the pre-approved R1-R5/N-series text moved to
   `docs/jsrf-operating-history.md`, section "Plan history moved on 2026-10-26".
 
@@ -101,6 +98,7 @@ Milestone names with their TR sections; details are in the TR.
 - **Q3 (N6b):** an aliased LIN_X8R8G8B8 render target reads alpha 1 (TR §31.86, L85).
 - **Q4 (N6c):** one depth surface per zeta, pinned (TR §31.87, L86).
 - **Q5a:** fixed-function lighting normal and light direction (TR §31.88, L82).
+- **Q5b stages 1-2:** fixed-function specular gate and oD1 routing; the pf term is ledgered (TR §§31.89-31.90, L87).
 
 ## Work queue (after the 2026-10-26 handoff)
 
@@ -144,7 +142,6 @@ cheap agent should not start them; it should report that they are next and stop.
 | # | Item | Size | Gate | Stop and ask if |
 |---|---|---|---|---|
 | Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md`. If `HEAD..upstream/main` is empty, add a dated "no upstream change" line to Current state and take the next item. | 1–2 sessions | the playbook's gates | any playbook stop condition |
-| Q5b | **Fixed-function specular lighting** (JSRF has lighting and specular on, light 0 infinite: TR §31.62). Today the executor passes the vertex's specular attribute through (`backend_vertex_extra`) and `lit_color` has no specular term. The rule is now derived from pinned xemu `478b4f49` (TR §31.89): with lighting on oD1 starts at (0,0,0, specular.a), each light adds `lightSpecular * attenuation * pf`, `pf = pow(max(0, N.H), specularPower)` when N.L > 0 and N.H > 0; SPECULAR_ENABLE (`0x03B8`) off overrides oD1 to (0,0,0,1); `0x0294` bit 0 is SEPARATE_SPECULAR (set: nothing enters oD0; clear: oD1 is added into oD0 and oD1 becomes the vertex attribute). The power comes from `0x09E0..0x09F4`, which the walk does NOT admit (L44), so those cases are PENDING. **Stage 1 is done** (gate committed RED, TR §31.89, L87); stage 2 implements the decided subset. **[stronger model or owner]** | 2 | a literal gate like Q5a's; admission only from a witnessed run | always: derivation and admission |
 | Q6 | **The upstream guest-CPU gate hangs at boot** (TR §31.83: `KeInsertQueueDpc`/`KeSetEvent` spin, no title in 300 s). Diagnose it before serial mode (L34) can retire. **[stronger model or owner]** | 1–2 | an exploratory e2e reaching the title with `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1` | always |
 | Q7 | **The last fatal alias `0x1688F3`** (L65): a reviewed `config/recovered-functions.json` entry with disassembly evidence, or translator clipping. | 1 | regen inventory shows it direct; full CTest; strict smoke | it is reached at runtime before the fix (then it's urgent) |
 | Q8 | **Is the texgen effect visible?** Capture the JSRF NORMAL_MAP stage-0 batches (`RECOMP_PB_COVERAGE=1`) and compare one scene with xemu (`scripts/xemu-oracle.py`). No fidelity claim without xemu. **[owner-assisted]** | 1 | viewed frames | xemu needs owner input |

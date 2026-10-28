@@ -25,9 +25,16 @@
  *       vsh-ff.c:379  `lightSpecular = lightSpecularColor(i) * attenuation * pf;`
  *     For an INFINITE light attenuation is exactly 1.0 (vsh-ff.c:330). So the
  *     term is 0 when N.L <= 0 OR N.H <= 0, and needs NO specular parameter.
- *     NOTE this is a `pow(nDotHV, specularPower)` form, NOT the
- *     `(N.H + L)/(M*N.H + N)` form the packet sketch quoted; the parameters
- *     only feed the exponent, so V2 holds either way.
+ *     NOTE the pinned `478b4f49` reads as a `pow(nDotHV, specularPower)` form.
+ *     xemu master supersedes it: commit `5c516ff0` (2026-10-17, "nv2a: Fix
+ *     specular param handling") replaces the curve-fit approximation with the
+ *     calculation of US6417851B1, citing nxdk_pgraph_tests `specular_tests.cpp`
+ *     and hardware golden results. Master's rule, with (L, M, N) =
+ *     SET_SPECULAR_PARAMS: pf = 0; if (nDotVP > 0 && nDotHV > -L) {
+ *     denom = M*nDotHV + N; if (denom == 0) pf = 10000; else if (denom > 0)
+ *     pf = clamp((nDotHV + L)/denom, 0, 10000); }. So the packet sketch's
+ *     ratio form was right for master and the 10000 clamp exists there.
+ *     V2's zero-term claim holds under both forms: N.L <= 0 gives pf = 0.
  *
  * V3. SPECULAR_ENABLE off forces the whole specular output:
  *       vsh-ff.c:424-426  `if (!state->specular_enable) oD1 = vec4(0,0,0,1);`
@@ -334,6 +341,8 @@ static const SCase *s_find_case(const char *name)
  * change admission, and a rejected walk is not a deciding semantic RED.
  *
  * P1 pf > 0 with the infinite half vector (JSRF's own state).
+ *    The pf formula is xemu master's (`5c516ff0`, see the V2 NOTE), not the
+ *    pinned `478b4f49` pow() form; derive the literal from the master rule.
  *    Needs: 0x09E0..0x09F4 admitted, plus a specular power whose reconstruction
  *    (pgraph.c:1873-1919) gives a usable exponent. Assert: oD1.rgb ==
  *    lightSpecular * pow(n.H, power) for a chosen n.H in (0,1).
@@ -348,10 +357,11 @@ static const SCase *s_find_case(const char *name)
  *    gate's literals are not edited after the fact; it can be added as a new
  *    case without touching these.
  *
- * P3 the specular power clamp/range (xemu's 10000 comment is not in this pin).
- *    Needs: admission (P1) and the exact clamp location in the pinned source,
- *    which this packet did NOT find - vsh-ff.c has no 10000 literal. Treat the
- *    clamp as UNVERIFIED and do not assert it.
+ * P3 the specular pf clamp/range.
+ *    The pinned `478b4f49` vsh-ff.c has no 10000 literal, but xemu master
+ *    (`5c516ff0`) clamps pf to [0, 10000] and sets pf = 10000 when the
+ *    denominator is 0 (see the V2 NOTE). Needs admission (P1) and a witnessed
+ *    parameter set that reaches the clamp.
  *
  * P4 LOCALEYE (LIGHT_CONTROL bit 16).
  *    Needs: the eyePosition/VPeye branch (vsh-ff.c:290-293, 334-337) decided
