@@ -8,8 +8,6 @@ owns shortcuts; `config/stop-chain.json` owns stops.
 
 ## Current state (as of 2026-10-28)
 
-- Toolkit `cf185d0` and the game (the 2026-10-26 handoff commits, from `a3eecf6` to the commit that
-  introduced this plan layout) are published; the last `PUSHED_TO` receipts are in TR §31.84.
 - D4 (BUMPENVMAP modes 6/7, then texgen and texture matrices, then records) is done (TR §31.84).
 - The xboxrecomp v0.16.0 catch-up is done (TR §31.83); serial guest mode (L34) stays because the
   upstream guest-CPU gate fails to reach the title.
@@ -19,16 +17,16 @@ owns shortcuts; `config/stop-chain.json` owns stops.
   `rejsrf` toolkit branch is unchanged; reJSRF v0.0.53-54 and rexbox v0.0.14-16 are build/locale/Linux
   only.
 - 2026-10-26, Q2 (N6a): the window clip is a scissor (toolkit `88fedc4`, game gate `c0c4d61`, TR
-  §31.85, L84); local, not pushed.
+  §31.85, L84).
 - 2026-10-27, Q3 (N6b): an aliased LIN_X8R8G8B8 render target reads alpha 1 (toolkit `1df8bb7`,
-  game gate `0d606cf`, TR §31.86, L85); local, not pushed.
+  game gate `0d606cf`, TR §31.86, L85).
 - 2026-10-27, Q4 (N6c): one depth surface per zeta is pinned by a test; production was right; the
-  CPU fixed-function rasteriser has no depth test (TR §31.87, L86); local, not pushed.
+  CPU fixed-function rasteriser has no depth test (TR §31.87, L86).
 - 2026-10-27, Q5a: fixed-function lighting takes the normal from the inverse model-view rows,
   normalizes it only when enabled, and normalizes an infinite light's direction (toolkit `e10087e`,
-  game gate `f8caed0`, controls `a3bf182`, TR §31.88, L82); local, not pushed.
+  game gate `f8caed0`, controls `a3bf182`, TR §31.88, L82).
 - 2026-10-28, Q5b stages 1 and 2 are done (gate `636a808`, toolkit `d02ed03`, controls `cd3dd38`; TR
-  §§31.89-31.90, L87); local, not pushed. Stage 2 routes fixed-function oD1 (lit gives (0,0,0,
+  §§31.89-31.90, L87). Stage 2 routes fixed-function oD1 (lit gives (0,0,0,
   attribute-4 alpha), SPECULAR_ENABLE off gives (0,0,0,1), non-separate specular passes attribute 4)
   and the two stage-1 reds are green. Correction (TR §31.90): the stage-1 pf derivation is pinned to
   xemu `478b4f49`, which xemu `5c516ff0` (2026-10-17) supersedes with a ratio form and a 10000 clamp;
@@ -36,6 +34,11 @@ owns shortcuts; `config/stop-chain.json` owns stops.
 - 2026-10-28, Q5b stage 1b: the admit-unknown e2e `20261028-122913-801-keyscript-e2e-vk-admit` met no
   unadmitted method, so JSRF never sent `SET_SPECULAR_PARAMS` on that route; Q5b is closed with the pf
   term ledgered (TR §31.90, L87).
+- 2026-10-28, Q13: tooling debts closed (game `58ea0ca`, toolkit `1c2096d`): `pbcov-mutants.py` takes
+  the ICD from the cache, the runner-preflight fakes carry the save roots, `check-merge-structure.py`
+  ignores an inherited `GIT_INDEX_FILE` (a real `git commit -- <paths>` passed the hook), and the
+  guest-meter serial tests wait for their condition (100/100 under load).
+- Toolkit `1c2096d` and game `58ea0ca` are published (receipts in TR §31.90).
 - The next item is Q6, which is marked [stronger model or owner].
 - Older dated status paragraphs and the pre-approved R1-R5/N-series text moved to
   `docs/jsrf-operating-history.md`, section "Plan history moved on 2026-10-26".
@@ -149,7 +152,6 @@ cheap agent should not start them; it should report that they are next and stop.
 | Q10 | **D5: plan the reJSRF-derived items** that the D3/D4 evidence shows apply (TR §31.55–31.56 table): ADXM exclusion, lighting gaps. Each becomes its own gated item. | planning | owner approval of the item list | always (it's a planning step) |
 | Q11 | **R5: reduce duplicated vertex-program decode logic** (`decode_program`, `derived_mask`, `find-vertex-programs.py` `program_info`). Low priority. | 1 | `gen-shaders.py --check` byte-identical corpus, V6 conformance green, a decode mutation rejected | the corpus bytes change |
 | Q12 | **Divergence clean-up after the next regeneration**: delete `RECOMP_BACKEDGE`, `xbox_inb/outb`, `usb_gamepad_output` and the `xbox_VblankAckHeld` stub (see the playbook's divergence inventory). | 1 | build, toolkit tests, full CTest, strict smoke | anything still references them at runtime |
-| Q13 | **Small tooling debts**: `scripts/pbcov-mutants.py:66` hard-codes the ICD path (use the cache's `XBR_VK_SW_ICD`); the 3 pre-existing `RunnerPreflightTests` failures in `tests/test_run_profiles.py` (fake runner log lacks `[SAVE] udata_root`); the pre-commit hook's `GIT_INDEX_FILE` leaks into `check-merge-structure.py` when `git commit -- <paths>` is used (until fixed, stage with `git add`, then `git commit -F`); toolkit `xbox_guest_meter` (`tests/kernel_guest_cpu`) fails intermittently right after a full `just tk-tests` run ("the yield came back before the worker had run", TR §31.85): make it load-tolerant or list it in `tests/FORK-STATUS.md`. | 1 | the affected tests green | — |
 
 ## Facts, tools and traps
 

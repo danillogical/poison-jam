@@ -18,10 +18,9 @@
   - anything compiled or translated at run time;
   - any push: pushes need the owner's confirmation, after `just audit`;
   - an owner-decided design point (see "Owner policy" in `docs/upstream-merge-playbook.md`).
-- **Commits:** unsigned, with no co-author or signature trailers. Stage with `git add <paths>`,
-  then `git commit -F <msgfile>`; do not use `git commit -- <paths>`, which trips a hook bug
-  (its `GIT_INDEX_FILE` leaks into `check-merge-structure.py`). Commit verified work before
-  ending a session.
+- **Commits:** unsigned, with no co-author or signature trailers, and only explicit paths
+  (`git add <paths>` then `git commit -F <msgfile>`, or `git commit -F <msgfile> -- <paths>`).
+  Commit verified work before ending a session.
 - The weekly upstream merge follows `docs/upstream-merge-playbook.md`; resolve conflicts toward
   upstream's design.
 - Model, provider and effort settings (including the retired `.omp/config.yml`) are the owner's;

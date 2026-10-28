@@ -8841,3 +8841,7 @@ never submitted `SET_SPECULAR_PARAMS` (`0x09E0..0x09F4`) there. The same script'
 one route, not whole-game absence. With light 0's specular colour 0 as well, the omitted pf term
 contributes nothing in observed JSRF state. **Q5b is closed**; the pf term stays ledgered (L87) until
 a run witnesses the parameters.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 1c2096d / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward cf185d0..1c2096d (5 commits: window clip, X8 alias alpha, Q5a lighting, Q5b oD1 routing, guest-meter test), toolkit pushed first on the owner's confirmation after `just audit both` (7 outgoing blobs, largest 303,049 bytes, 0 secret hits); upstream and nworkers push URLs remain DISABLED.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 58ea0ca / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward bad4524..58ea0ca (16 commits: Q1-Q5b gates, controls and records, Q13 tooling); 72 outgoing blobs, largest 687,307 bytes, 0 secret hits, no forbidden path.
