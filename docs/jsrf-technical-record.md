@@ -8845,3 +8845,26 @@ a run witnesses the parameters.
 PUSHED_TO: origin / BRANCH: main / COMMIT: 1c2096d / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward cf185d0..1c2096d (5 commits: window clip, X8 alias alpha, Q5a lighting, Q5b oD1 routing, guest-meter test), toolkit pushed first on the owner's confirmation after `just audit both` (7 outgoing blobs, largest 303,049 bytes, 0 secret hits); upstream and nworkers push URLs remain DISABLED.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 58ea0ca / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward bad4524..58ea0ca (16 commits: Q1-Q5b gates, controls and records, Q13 tooling); 72 outgoing blobs, largest 687,307 bytes, 0 secret hits, no forbidden path.
+
+### §31.91 — Q7: `0x1688F3` is an internal label named by a coincidental word (2026-10-28)
+
+**Question.** L65 left one fatal late-owner alias, `0x1688F3`, for a reviewed recovery entry or
+translator clipping.
+
+**Evidence (original XBE).**
+- `inspect-jsrf.py disasm 0x1688B0 0x168910`: `0x1688F3` (`mov eax,0x800710D8; ret 0xC`) is one of
+  two error tails of `0x1688B0`; the branches at `0x1688C9`, `0x1688D9` and `0x1688E3` jump to it.
+  `0x1688B0` is already a recovered function whose repaired span runs to `0x168903`
+  (`config/recovered-functions.json`), so the tail is translated inside its owner.
+- `inspect-jsrf.py find 0x001688F3`: one occurrence in the whole image, `.data` `0x1F70DC`. Positive
+  control: `find 0x001688B0` finds the vtable entry at `.rdata` `0x1E3AB8`.
+- The words around `0x1F70DC` are not code pointers: `0x000788C8, 0x000888CA, 0x000988CD, ...,
+  0x001588EA, 0x001688F3, 0x001788F5, ...` — a table of packed 16-bit pairs whose high half counts
+  7, 8, 9, ... and whose low half rises slowly. `0x001688F3` falls in `.text` by coincidence.
+
+**Classification.** An internal label named by a coincidental data word (AGENTS.md, "classify
+missing targets"). Nothing calls it, so it needs no body of its own. The fatal alias wrapper is the
+right behaviour: an indirect call there would be a defect elsewhere, and it aborts with the address
+logged. The dispatch comment's "owner 0x00168EC0" is the late-owner rule's label (the next function
+start), not the real owner, which is `0x1688B0`; it is cosmetic. **No code change.** L65 is
+updated.

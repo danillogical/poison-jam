@@ -39,6 +39,8 @@ owns shortcuts; `config/stop-chain.json` owns stops.
   ignores an inherited `GIT_INDEX_FILE` (a real `git commit -- <paths>` passed the hook), and the
   guest-meter serial tests wait for their condition (100/100 under load).
 - Toolkit `1c2096d` and game `58ea0ca` are published (receipts in TR §31.90).
+- 2026-10-28, Q7: `0x1688F3` is an internal label named by a coincidental data word; the fatal trap
+  stays and no code changes (TR §31.91, L65).
 - The next item is Q6, which is marked [stronger model or owner].
 - Older dated status paragraphs and the pre-approved R1-R5/N-series text moved to
   `docs/jsrf-operating-history.md`, section "Plan history moved on 2026-10-26".
@@ -146,7 +148,6 @@ cheap agent should not start them; it should report that they are next and stop.
 |---|---|---|---|---|
 | Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md`. If `HEAD..upstream/main` is empty, add a dated "no upstream change" line to Current state and take the next item. | 1–2 sessions | the playbook's gates | any playbook stop condition |
 | Q6 | **The upstream guest-CPU gate hangs at boot** (TR §31.83: `KeInsertQueueDpc`/`KeSetEvent` spin, no title in 300 s). Diagnose it before serial mode (L34) can retire. **[stronger model or owner]** | 1–2 | an exploratory e2e reaching the title with `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1` | always |
-| Q7 | **The last fatal alias `0x1688F3`** (L65): a reviewed `config/recovered-functions.json` entry with disassembly evidence, or translator clipping. | 1 | regen inventory shows it direct; full CTest; strict smoke | it is reached at runtime before the fix (then it's urgent) |
 | Q8 | **Is the texgen effect visible?** Capture the JSRF NORMAL_MAP stage-0 batches (`RECOMP_PB_COVERAGE=1`) and compare one scene with xemu (`scripts/xemu-oracle.py`). No fidelity claim without xemu. **[owner-assisted]** | 1 | viewed frames | xemu needs owner input |
 | Q9 | **Optional D4 step 8: an in-game boost/attract-demo comparison against xemu.** Boost needs spray cans, so it needs a route script or the owner playing. **[owner-assisted]** | 1–2 | viewed frames | always |
 | Q10 | **D5: plan the reJSRF-derived items** that the D3/D4 evidence shows apply (TR §31.55–31.56 table): ADXM exclusion, lighting gaps. Each becomes its own gated item. | planning | owner approval of the item list | always (it's a planning step) |
