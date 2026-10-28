@@ -18,6 +18,8 @@ Each fixture states the wrong outcome it prevents:
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -243,6 +245,37 @@ class RealRepositoryTests(unittest.TestCase):
             rep = self._scan(rev)
             self.assertEqual(rep['findings'], [], f'{rev} should be clean')
             self.assertEqual(rep['unknown'], [], f'{rev} should parse cleanly')
+
+
+class InheritedGitIndexTests(unittest.TestCase):
+    """`git commit -- <paths>` exports GIT_INDEX_FILE for the game repository; the checker reads the toolkit."""
+
+    def test_worktree_listing_ignores_an_inherited_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            toolkit = Path(tmp) / 'toolkit'
+            toolkit.mkdir()
+            (toolkit / 'src').mkdir()
+            (toolkit / 'src' / 'a.c').write_text('int a(void) { return 0; }\n')
+            subprocess.run(['git', '-C', str(toolkit), 'init', '-q'], check=True)
+            subprocess.run(['git', '-C', str(toolkit), 'add', 'src/a.c'], check=True)
+            # An unrelated, empty index file stands in for the game commit's temporary index.
+            foreign = Path(tmp) / 'foreign-index'
+            foreign_env = dict(os.environ, GIT_INDEX_FILE=str(foreign))
+            subprocess.run(['git', '-C', str(toolkit), 'read-tree', '--empty'],
+                           check=True, env=foreign_env)
+            saved_toolkit, saved_env = ms.TOOLKIT, os.environ.get('GIT_INDEX_FILE')
+            ms.TOOLKIT = toolkit
+            os.environ['GIT_INDEX_FILE'] = str(foreign)
+            try:
+                self.assertEqual(ms.scope_files_worktree(), ['src/a.c'])
+                # --cached alone distinguishes the toolkit's index from the inherited one.
+                self.assertEqual(ms._git('ls-files', '--cached').split(), ['src/a.c'])
+            finally:
+                ms.TOOLKIT = saved_toolkit
+                if saved_env is None:
+                    os.environ.pop('GIT_INDEX_FILE', None)
+                else:
+                    os.environ['GIT_INDEX_FILE'] = saved_env
 
 
 if __name__ == '__main__':

@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -64,6 +65,8 @@ from toolkit_path import toolkit_path
 ROOT = Path(__file__).resolve().parents[1]
 TOOLKIT = toolkit_path()
 CHECKER_VERSION = 'jsrf-merge-structure/1'
+REPO_LOCAL_GIT_VARS = ('GIT_INDEX_FILE', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_PREFIX',
+                       'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY')
 
 # SCOPE: the toolkit paths that are build inputs of jsrf_recomp.exe.  Recorded as a
 # path list with a guard that fails closed if the build graph starts including
@@ -84,9 +87,18 @@ DEFN_INLINE_RE = re.compile(r'^[A-Za-z_][\w \t\*]*?\b([A-Za-z_]\w*)\s*\([^;{]*\)
 OBJ_RE = re.compile(r'^(?:static\s+)?(?:const\s+)?[\w \t\*]*?\b([A-Za-z_]\w*)\s*(\[[^\]]*\])?\s*(=|;)')
 
 
+def _toolkit_git_env() -> dict[str, str]:
+    """The environment with the committing repository's git state removed.
+
+    `git commit -- <paths>` exports GIT_INDEX_FILE for the game repository; the toolkit is a
+    different repository, so inheriting it would make `git -C <toolkit>` read the wrong index.
+    """
+    return {k: v for k, v in os.environ.items() if k not in REPO_LOCAL_GIT_VARS}
+
+
 def _git(*args: str) -> str:
     out = subprocess.run(['git', '-C', str(TOOLKIT), *args],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, env=_toolkit_git_env())
     if out.returncode != 0:
         raise RuntimeError(f'git {" ".join(args)} failed: {out.stderr.strip()}')
     return out.stdout

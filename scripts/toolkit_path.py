@@ -34,6 +34,7 @@ _CACHE_ENTRY = r'^\s*{name}\s*(?::\s*[A-Za-z_][A-Za-z0-9_]*\s*)?=\s*(.*?)\s*$'
 CACHE_RE = re.compile(_CACHE_ENTRY.format(name='XBOXRECOMP_DIR'), re.MULTILINE)
 # The owned host-tool tree's own configure root (see `scripts/gen-shaders.py`).
 HOME_DIR_RE = re.compile(_CACHE_ENTRY.format(name='CMAKE_HOME_DIRECTORY'), re.MULTILINE)
+VK_SW_ICD_RE = re.compile(_CACHE_ENTRY.format(name='XBR_VK_SW_ICD'), re.MULTILINE)
 
 
 class ToolkitPathError(RuntimeError):
@@ -49,6 +50,14 @@ def cache_entry(path, entry_re):
     if not match or not match.group(1).strip():
         return None
     return match.group(1).strip()
+
+
+def software_icd(build_dir=None):
+    """The software Vulkan ICD manifest: `$XBR_VK_SW_ICD`, else the game build cache's entry, else None."""
+    env = os.environ.get('XBR_VK_SW_ICD')
+    if env:
+        return env
+    return cache_entry(Path(build_dir or GAME_BUILD_DIR) / CACHE_NAME, VK_SW_ICD_RE)
 
 
 def _same(a, b):

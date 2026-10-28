@@ -62,12 +62,11 @@ import tempfile
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from toolkit_path import toolkit_path  # noqa: E402
+from toolkit_path import software_icd, toolkit_path  # noqa: E402
 
 FROZEN_COMMIT = "2bcdc3081362341b92a9efb8afad00bdfd005c85"
 HERE = pathlib.Path(__file__).resolve().parent
 GAME = HERE.parent
-DEFAULT_ICD = pathlib.Path("C:/Users/logic/tools/vk-sw/x64/lvp_icd.x86_64.json")
 
 # Files this harness mutates; their bytes are hashed in the shared checkout
 # before and after every mutation, and in the private copy after each restore.
@@ -608,7 +607,7 @@ def main(argv=None) -> int:
                          "(default: a fresh temp directory)")
     ap.add_argument("--generator", default="Visual Studio 18 2026")
     ap.add_argument("--icd", type=pathlib.Path, default=None,
-                    help="software Vulkan ICD manifest (default: $XBR_VK_SW_ICD or the local lavapipe)")
+                    help="software Vulkan ICD manifest (default: $XBR_VK_SW_ICD or the build cache's XBR_VK_SW_ICD)")
     ap.add_argument("--only", action="append", default=[],
                     help="run only the named mutant(s)")
     ap.add_argument("--list", action="store_true")
@@ -665,23 +664,11 @@ def main(argv=None) -> int:
 
 def _run_owned(args, mutants, toolkit, game, head, status, shared_hashes,
                work) -> int:
-    # ICD: explicit, environment, the existing build's cache, then the local default.
+    # ICD: explicit, else the environment, else the existing build's cache.
     icd = args.icd
     if icd is None:
-        env_icd = os.environ.get("XBR_VK_SW_ICD")
-        if env_icd:
-            icd = pathlib.Path(env_icd)
-        else:
-            cache = game / "build" / "CMakeCache.txt"
-            if cache.is_file():
-                for line in cache.read_text(errors="replace").splitlines():
-                    if line.startswith("XBR_VK_SW_ICD:"):
-                        value = line.split("=", 1)[1].strip()
-                        if value:
-                            icd = pathlib.Path(value)
-                        break
-    if icd is None and DEFAULT_ICD.is_file():
-        icd = DEFAULT_ICD
+        found = software_icd(game / "build")
+        icd = pathlib.Path(found) if found else None
     if args.no_vk:
         icd = None
 

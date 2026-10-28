@@ -596,6 +596,8 @@ class RunnerPreflightTests(unittest.TestCase):
                 checkpoints = ['probe_gpu'] if probe.startswith('gpu-') else [
                     'memory_ready', 'guest_entry']
                 log = f'[SAVE] resolved_root={save_path}\n'
+                log += f'[SAVE] udata_root={save_path}\\UDATA\\5345000a\n'
+                log += f'[SAVE] tdata_root={save_path}\\TDATA\\5345000a\n'
                 if marker_mode == 'matching':
                     log += f'[SAVE] path_layer_root={save_path}\n'
                 elif marker_mode == 'mismatch':
