@@ -6,7 +6,7 @@ operations; `docs/jsrf-run-profiles.md` owns evidence classification;
 `docs/jsrf-technical-record.md` (TR) owns established findings; `docs/jsrf-compatibility-ledger.md`
 owns shortcuts; `config/stop-chain.json` owns stops.
 
-## Current state (as of 2026-10-26)
+## Current state (as of 2026-10-27)
 
 - Toolkit `cf185d0` and the game (the 2026-10-26 handoff commits, from `a3eecf6` to the commit that
   introduced this plan layout) are published; the last `PUSHED_TO` receipts are in TR §31.84.
@@ -24,10 +24,11 @@ owns shortcuts; `config/stop-chain.json` owns stops.
   game gate `0d606cf`, TR §31.86, L85); local, not pushed.
 - 2026-10-27, Q4 (N6c): one depth surface per zeta is pinned by a test; production was right; the
   CPU fixed-function rasteriser has no depth test (TR §31.87, L86); local, not pushed.
-- 2026-10-27, Q5 split into Q5a and Q5b. The Q5a lighting gate is committed and FAILS on purpose
-  (`jsrf_light_stream_{imv_scale_off,imv_rows,dir_unit}` and their `_vk_` halves; the other four cases
-  pass). Until Q5a lands, those six are the only expected red tests in `just ctest-limited`.
-- The next item is Q5a: implement the decided rule; do not edit the gate.
+- 2026-10-27, Q5a: fixed-function lighting takes the normal from the inverse model-view rows,
+  normalizes it only when enabled, and normalizes an infinite light's direction (toolkit `e10087e`,
+  game gate `f8caed0`, controls `a3bf182`, TR §31.88, L82); local, not pushed. Q5b (specular)
+  remains.
+- The next item is Q5b, **[stronger model or owner]**: report it and stop; do not skip past it.
 - Older dated status paragraphs and the pre-approved R1-R5/N-series text moved to
   `docs/jsrf-operating-history.md`, section "Plan history moved on 2026-10-26".
 
@@ -88,6 +89,7 @@ Milestone names with their TR sections; details are in the TR.
 - **Q2 (N6a):** the window clip is a scissor (TR §31.85, L84).
 - **Q3 (N6b):** an aliased LIN_X8R8G8B8 render target reads alpha 1 (TR §31.86, L85).
 - **Q4 (N6c):** one depth surface per zeta, pinned (TR §31.87, L86).
+- **Q5a:** fixed-function lighting normal and light direction (TR §31.88, L82).
 
 ## Work queue (after the 2026-10-26 handoff)
 
@@ -131,7 +133,6 @@ cheap agent should not start them; it should report that they are next and stop.
 | # | Item | Size | Gate | Stop and ask if |
 |---|---|---|---|---|
 | Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md`. If `HEAD..upstream/main` is empty, add a dated "no upstream change" line to Current state and take the next item. | 1–2 sessions | the playbook's gates | any playbook stop condition |
-| Q5a | **Fixed-function lighting normal and light direction.** The gate is committed and red: `tests/light_stream_cases.h` states the decided rule (xemu facts plus the texgen normal of TR §31.84). In toolkit `lit_color` (`src/kernel/nv2a_pb_exec.c:2777`): (1) transform the normal by the inverse model-view rows (`0x0580`, as `ff_texcoord` does at `:2674`), not the model-view; (2) normalize it only when `0x03A4` bit 0 is set; (3) normalize an infinite light's direction before `max(0, N·L)` (the sign is already right). Keep the back-face flip (L82). Do not edit the gate or its literals. | 1 | `jsrf_light_stream_*` 7/7 on both halves; old-red is the committed red run (toolkit `1df8bb7`); add controls to `scripts/bumpenv-q-controls.py` (e.g. model-view normal, always-normalize, unnormalized L) RED then GREEN; full CTest; strict smoke; a Vulkan e2e with viewed frames compared to `20261027-000540-835-keyscript-e2e-vk-x8` (lit characters and streets may change brightness; describe it, claim no fidelity) | a gate literal looks wrong (stop; never edit it to pass) |
 | Q5b | **Fixed-function specular lighting** (JSRF has lighting and specular on, light 0 infinite: TR §31.62). Today the executor passes the vertex's specular attribute through (`backend_vertex_extra`) and `lit_color` has no specular term. xemu facts gathered (`vsh-ff.c`, `pgraph.c`): with lighting on, oD1 starts at (0,0,0, specular.a) and each light adds `specular_i * att * pf`, `pf = clamp((N·H + L)/(M·N·H + N), 0, 10000)` when `N·L > 0` and `N·H > -L` (L, M, N = SET_SPECULAR_PARAMS `0x09E0`); H is the light's INFINITE_HALF_VECTOR (`b+0x28`), or `normalize(L + VPeye)` with LIGHT_CONTROL (`0x0294`) LOCALEYE (bit 16); SPECULAR_ENABLE (`0x03B8`) off gives oD1 = (0,0,0,1); on without SEPARATE_SPECULAR (bit 0) adds oD1 to oD0 and oD1 becomes the vertex specular. `0x09E0..0x09F4` are NOT admitted by the walk (L44): measure first. **[stronger model or owner]** | 2 | a literal gate like Q5a's; admission only from a witnessed run | always: derivation and admission |
 | Q6 | **The upstream guest-CPU gate hangs at boot** (TR §31.83: `KeInsertQueueDpc`/`KeSetEvent` spin, no title in 300 s). Diagnose it before serial mode (L34) can retire. **[stronger model or owner]** | 1–2 | an exploratory e2e reaching the title with `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1` | always |
 | Q7 | **The last fatal alias `0x1688F3`** (L65): a reviewed `config/recovered-functions.json` entry with disassembly evidence, or translator clipping. | 1 | regen inventory shows it direct; full CTest; strict smoke | it is reached at runtime before the fix (then it's urgent) |

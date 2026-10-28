@@ -8469,3 +8469,106 @@ vertex-program path (`raster_xf_triangle`) uses the per-zeta buffers. The CPU ha
 carries that as a labelled limitation literal (L86). Controls (`just controls zeta`, RESULT: PASS):
 `zeta-vk-shared` (Vulkan depth cache ignores the address) and `zeta-cpu-shared` (CPU buffers ignore
 the offset) each went RED on "P region, upper-left triangle (4,4)" and GREEN restored.
+
+### §31.88 — Q5a: fixed-function lighting normal and light direction (2026-10-27)
+
+**Defect.** This closes §31.84's "Findings for later". Toolkit `lit_color` transformed the lighting
+normal by the model-view rows (`0x0480`) instead of the inverse model-view rows (`0x0580`) and always
+normalized it; §31.84 also listed its back-face flip as a disagreement with xemu, which Q5a retains
+deliberately (L82). The gate found a third defect: an infinite light's direction was used at its
+stored length instead of normalized. The decided rule, as `tests/light_stream_cases.h` states it
+(xemu facts, no code copied):
+
+- e = MODEL_VIEW (16 words at `0x0480`, rows, delivery order) . (x, y, z, 1);
+- n = INVERSE_MODEL_VIEW rows . normal, n[i] = IMV[4i]nx + IMV[4i+1]ny + IMV[4i+2]nz (12 words at
+  `0x0580`), normalized only when SET_NORMALIZATION_ENABLE (`0x03A4`) bit 0 is set;
+- if n.e > 0 the normal faces away from the eye at the origin, and n = -n (L82, retained);
+- light 0 infinite (SET_LIGHT_ENABLE_MASK `0x03BC` = 1): L = normalize(INFINITE_DIRECTION words
+  `0x1034..0x103C`), contribution = ambient + diffuse . max(0, n.L), per channel;
+- rgb = SCENE_AMBIENT (`0x0A10..0x0A18`) + contribution, clamped to [0, 1]; alpha =
+  SET_MATERIAL_ALPHA (`0x03B4`), because SET_COLOR_MATERIAL (`0x0298`) = 0 does not route the diffuse
+  from the vertex.
+
+**Gate (game `f8caed0`, committed before the fix, UNCHANGED).**
+`jsrf_light_stream_{sign_toward,sign_away,imv_scale_off,imv_scale_on,imv_rows,dir_unit,flip}` and
+their `_vk_` halves: 14 tests, seven cases per half. Every literal is hand-derived in
+`tests/light_stream_cases.h`, including the wrong-reading values that make a defect visible (the
+column read of `imv_rows` giving `0xBF2F2F5F`, the unnormalized L of `dir_unit` giving
+`0xBFFFAF9F`). Old-red is the committed red run on related toolkit `1df8bb7`: `imv_scale_off`,
+`imv_rows` and `dir_unit` failed on both halves on the named assertion "lit pixel equals the
+hand-derived literal", and the other four cases passed. Q5a's work-queue item accepts that committed
+run as old-red; no new private old-red clone was built for this record.
+
+**Fix (toolkit `e10087e`, related dependency, already committed locally).** `lit_color` now
+transforms the normal by the inverse model-view rows (`0x0580`), normalizes it only when `0x03A4`
+bit 0 is set, and normalizes an infinite light's direction before `max(0, N.L)`. The existing L82
+back-face flip is retained. No specular work, no method-admission change, no D3D11-back-end work, and
+nothing translated or compiled at run time.
+
+**Controls (game `a3bf182`).** `just controls light` (`scripts/bumpenv-q-controls.py --control
+light`: `light-always-normalize`, `light-direction-unnormalized`, `light-modelview-normal`) reported
+`RESULT: PASS`. Each control went RED on "lit pixel equals the hand-derived literal" on both the CPU
+and Vulkan halves, then GREEN was restored; the cases each control lists as unaffected stayed green;
+the shared toolkit production hashes were identical before and after, and the owned scratch was
+removed. Example: `light-direction-unnormalized` RED read `0xBFFFAF9F` where `0xBFAF6F7F` was due.
+
+**Verification.** `just build` passed with the known 18 MSB8028 plus existing executor warnings, none
+in the changed lighting hunks, and source/executable identity recorded. Focused `just ctest-limited
+-R ^jsrf_light_stream_ --output-on-failure`: 14/14 pass, none skipped. `just check` passed before the
+runtime captures. Full `just ctest-limited --output-on-failure`: 283/283 pass, none skipped, 645.42
+s. The initial `just audit both` passed, after a sandbox permission retry: it then saw 9 outgoing game
+commits through `f8caed0` and 2 related-toolkit commits through `1df8bb7`, with 0 secret hits, no
+forbidden paths and no oversized blobs. Both repositories were fetched and clean, and nothing was
+pushed.
+
+**Runtime.**
+- *Strict smoke* `20261027-211319-374-q5a-light-smoke`, the sole strict run archived this session:
+  `diagnostic_deadline` (bounded capture only, not a normal exit; collector exit 3, which `just`
+  reports as a recipe exit 1) at 30.91 s. `memory_ready` and `guest_entry` reached, checkpoints
+  passed, none missing; `dump_ok` and `gpu_report_ok` true; 14 native threads, 134 named frames, 1 GPU
+  snapshot, 0 dropped, save root verified. `check-run-profile.py` reclassifies it STRICT (exact
+  `RECOMP_GPU_ACK=0`). Both repository patch/status hashes are empty (game `a3bf182`, related toolkit
+  `e10087e`); exe SHA-256 `1a442a5a44fdc6d310194a87518aabe4b31d0fc2a60ecee3c81002b4ee6962b3`. No
+  FATAL, ICALL, ALIAS-ICALL, STUB or ABI FAILURE lines. No GPU executor override was set, so no lit
+  batch is claimed from it.
+- *Vulkan e2e* `20261027-211411-161-keyscript-q5a-light-e2e-vk`, run as
+  `python -X utf8 scripts/key-script-run.py q5a-light-e2e-vk 620 config/key-scripts/e2e.json
+  RECOMP_GPU_BACKEND=vulkan RECOMP_VK_PIPELINE_CACHE=off`: EXPLORATORY (default GPU ack; the archive
+  records `keyscript_profile`, not `run_profile`). `script_ok`, 72 steps, outcome
+  `keyscript_complete`, 620.4 s, killed at the bound (process exit 1), 32 timeline frames. Log counts:
+  key_down 22, input_nonzero 3, icall 0, fatal 0, still_rejecting 0. Last present `[FBPRESENT]
+  t=618s presents=39234 hash=821bf9b145b24c5a CHANGED`. Repository identities clean (`a3bf182` /
+  `e10087e`), save root verified. Last `[GPUVK]`: flips 38,685, draws 3,441,324, `rt_aliases` 38,684,
+  `rt_copies` 0, `dropped_tris` 8 (as in §§31.85-31.86), `wclip_approx` 0, validation errors and
+  warnings 0, `vsh_misses` and identity failures 0, `rc_fallback` 0. Those counters are bounded
+  observations and are not interpreted here: no performance claim. Both this run and the baseline use
+  an RTX 4070 Laptop GPU; the baseline budget was 560 s against this 620 s.
+- *Visual comparison* (`20261027-211411-161-keyscript-q5a-light-e2e-vk` against the baseline
+  `20261027-000540-835-keyscript-e2e-vk-x8`), the parent session's own viewing of seven frames at
+  640x480 (main-menu, intro-00, intro-06, start, paused, resumed, b-after-jump2). No image diff was
+  computed and no image is attached here. *Observation:* no obvious systematic brightness change on
+  comparable Garage floor, wall and clothing surfaces; the Corn dialogue scene looks similarly lit,
+  with different character poses; the menu attract scene differs with timing; intro-06 and start
+  poses differ; the paused map shows a different player heading; resumed and b-after-jump2 have
+  different camera and player positions, so those are not aligned pixel comparisons; the new resumed
+  frame shows an interaction bubble, and the final gameplay frame is beside the crates/wall rather
+  than facing another character. *Inference:* none about lighting fidelity; the frames are not called
+  identical, and trajectory differences are not attributed to this fix.
+
+**Relied-on ledger IDs (exploratory Vulkan path).** L16 (GPU busy-bit acknowledgements and DMA_GET
+mirroring, on by default), L17 (fence mirror), L18 (pushbuffer executor), L34 (serialised guest mode,
+kept in the tree because upstream's guest-CPU gate does not reach the title: this run did not set
+`RECOMP_GUEST_SERIAL`, so its back-edge yields were inert and guest threads ran concurrently, L11),
+L56 (title-transition disc-error timeout patched), L57 and L58 (USB OHCI/XID and host keyboard as a
+pad), L61 (APU interrupt), L62 (Vulkan back end), L82 (the retained per-vertex facing-away flip).
+Listing an ID does not claim the path was exercised in a way this result depends on.
+
+**What it does not prove.** Hardware fidelity, or any in-game lighting change. Whether lit batches
+occurred in the strict smoke. Specular lighting (Q5b). Local or spot lights, more than one light,
+colour material, or textured lit draws: the gate decides one infinite light with SET_COLOR_MATERIAL
+= 0 and no texture. Agreement between the two renderers proves nothing, because the executor
+computes the vertex colour for both.
+
+**State.** Q5a is done locally; nothing is pushed, there are no push receipts, and the related
+toolkit's `upstream` and `nworkers` push URLs stay DISABLED. Next is Q5b, **[stronger model or
+owner]**: report and stop.
