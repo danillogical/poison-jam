@@ -6,7 +6,7 @@ operations; `docs/jsrf-run-profiles.md` owns evidence classification;
 `docs/jsrf-technical-record.md` (TR) owns established findings; `docs/jsrf-compatibility-ledger.md`
 owns shortcuts; `config/stop-chain.json` owns stops.
 
-## Current state (as of 2026-10-27)
+## Current state (as of 2026-10-28)
 
 - Toolkit `cf185d0` and the game (the 2026-10-26 handoff commits, from `a3eecf6` to the commit that
   introduced this plan layout) are published; the last `PUSHED_TO` receipts are in TR §31.84.
@@ -31,7 +31,7 @@ owns shortcuts; `config/stop-chain.json` owns stops.
   was re-derived line by line from pinned xemu `478b4f49` and three of the packet sketch's
   statements did not survive — the term is `pow(nDotHV, specularPower)`, not a
   `(N.H+L)/(M*N.H+N)` ratio, and no 10000 clamp exists in the pin. The committed gate is
-  `tests/spec_stream_*` plus its CMake registration (game gate, TR §31.89, L87); nothing is
+  `636a808` (`tests/spec_stream_*` plus its CMake registration; TR §31.89, L87); nothing is
   pushed. Exactly two named tests are RED on pinned toolkit `e10087e` and must stay unchanged:
   `jsrf_spec_stream_vk_lit_d1_spec_off` and `jsrf_spec_stream_vk_lit_d1_nl_negative`, both reading
   `0xBFFF00FF` where `0xBF000000` is due. **Full CTest is expected to show exactly these 2 failures

@@ -8752,3 +8752,19 @@ be edited by the implementation session; the next step is Q5b stage 2, which imp
 oD1 = (0,0,0,·), the N.L / SPECULAR_ENABLE gating and the separate-specular guard against these
 fixed literals, and adds mutation controls. Stage 1b (admitting `0x09E0..0x09F4` from a witness)
 comes before the `pf` term.
+
+**Parent integration (2026-10-28).** Gate `636a808` is committed locally; its test files and
+literals match the accepted packet snapshot. The parent independently verified the pinned xemu
+revision and all seven source hashes above, and reproduced the deciding results in a fresh
+`--no-hardlinks` toolkit clone pinned to `e10087e`, under an owned scratch directory outside both
+repositories and `%TEMP%`. The ten specular cases gave 8 passes and exactly the two named pixel
+failures above, with no skip, stream-refusal, draw-count or backend-health failure (3.31 s).
+All 14 unchanged Q5a cases passed against that same clone (1.71 s). The archived-witness scan
+hashes and zero counts above were independently reproduced. The primary guarded `just build`
+passed with 73 targets / 293 registered tests and no regeneration. No production or method
+admission changed, and no new game run was archived during integration.
+The parent's final `just check` passed. Full limited CTest completed in 606.49 s: 291 passed,
+exactly `jsrf_spec_stream_vk_lit_d1_spec_off` and `jsrf_spec_stream_vk_lit_d1_nl_negative` failed
+on their named pixel assertions, and none were skipped (293 total). This is the expected red
+gate state, not an all-green suite or a completed Q5b implementation. The private clone/build
+was removed after verifying its exact owned path, clean state and pinned revision.
