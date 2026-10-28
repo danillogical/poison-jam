@@ -14,8 +14,8 @@
   "src/recomp/gen/recomp_funcs.h": "6716815d1986d3b896c7efd13b64946b752e47e681f85f69dd3d99d176c55ab5",
   "src/recomp/gen/recomp_stubs_recovery.c": "6cbb4fafaed291d4b1854e7cd3926b8fc1ff46e17abde4bf77a30d536bddd5c1",
   "src/recomp/gen/recomp_types.h": "edc184333db517bfd74a752b4d177828659db62e72f34811daff86cc1ef3b720",
-  "src/recomp/gen/shaders/nv2a_vsh_programs.c": "c71e02ec118a05a3c548cd1514fe52e3b194ec3d4b915032ac21b445ae8b54d4",
-  "src/recomp/gen/shaders/nv2a_vsh_programs.h": "6ffdf27eb474bdc8a4e273803ab522eb9fdf4bc14556ee7b7a219a2dc13b1254",
+  "src/recomp/gen/shaders/nv2a_vsh_programs.c": "ca6677fda89b6e60d32e76ea277c6cb46665c0454fce1698a959e93635debd27",
+  "src/recomp/gen/shaders/nv2a_vsh_programs.h": "12d5445b2cc50cf03632f29ccd9e270cb209b9059b92d6623344bdd0f2786edd",
   "src/recomp/recovered/recovered.c": "5e2b356985ddc8edaf7436852cba2bc413632bfb05f7250a7e1cac1df2970f58",
   "src/recomp/recovered/recovered_11c1_test.c": "1986aac2eecbc93748c3677d9fea752e6bbd2179a14a4eb75fac20a7f14cc437",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
@@ -23,16 +23,16 @@
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
-   "dirty": false,
-   "revision": "772b33a580c9aecf21ac92b0c899e8de162b3574",
+   "dirty": true,
+   "revision": "8a6cf3951346aadfddb11e8f543e2c55f9de25ea",
    "state": "MEASURED",
-   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   "status_sha256": "6facda9662cc468bdd6980fcfb17cee4fa5ac8f66f63d34ab401eae4092f0292"
   },
-  "scripts/recover-functions.py": "4cab6b7325e42b62651f31a7948709b115f631eec5b13b2447dc9367600b40d5",
-  "scripts/relift-selected.py": "09f3ba3f2e9c9e4f7ca9d388d690a13b8e9370bba7faa103518c21bdb8bc6590",
+  "scripts/recover-functions.py": "4bb63b1342e57992e4bb57041d688cc68780a80dcdc1b1d671b5ccf620d025d0",
+  "scripts/relift-selected.py": "8175bc61ae19a244da396fd3d3a1a9d9379383046d04fc6f45b1d57c77a30c18",
   "toolkit": {
    "dirty": false,
-   "revision": "af78da4baad7453ca7341a1bb0fb69d4d08bc2bc",
+   "revision": "ebf62bbbd0c9deea24e96888c32c689fc95d7072",
    "state": "MEASURED",
    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
@@ -1683,6 +1683,13 @@
    "inputs_changed": [],
    "generator_changed": "toolkit tools/recomp/translator.py (af78da4)",
    "cause": "xboxrecomp af78da4: a late-owner tail_jump_alias that no real body covers and whose bytes end in a ret, jmp or trap keeps its own body instead of a fatal dispatch wrapper. v0.16.0 discovery had folded 124 previously translated functions into fatal wrappers (121 C++ unwind handlers at 0x186C60-0x18AC90, the frame-handler thunk 0x18708E, the CRT thread-notify routine 0x181009, and 0x1688F3). 123 are direct bodies again; 0x1688F3, an error return inside 0x1688B0 named by a .data table, stays fatal. Generated functions 5,626 -> 5,754; dispatch entries 9,332 unchanged; alias wrappers 432 -> 304 (fatal late-owner 274 -> 139, owner aliases 158 -> 165); recovery traps 66; recovered/generated duplicates 0."
+  },
+  {
+   "command": "game: just shaders (scripts/gen-shaders.py) against toolkit Q11 working tree (shared nv2a_vsh_ins_input_mask)",
+   "date": "2026-10-28",
+   "inputs_changed": [],
+   "generator_changed": "toolkit src/video/nv2a_vsh_hlsl.h and src/video/nv2a_vsh_hlsl_tool.c (the input-mask rule moved into one shared inline function; no semantic change)",
+   "cause": "Q11 (R5): only the corpus's recorded provenance changed (source.nv2a_vsh_hlsl.h, source.nv2a_vsh_hlsl_tool.c and tool.sha256, six header lines across nv2a_vsh_programs.c/.h); every program byte is identical to the previous corpus (line diff), and gen-shaders.py --check reports byte-identical output for 128 programs, 126 distinct, 0 collisions."
   }
  ]
 }

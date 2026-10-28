@@ -12,8 +12,8 @@
   "src/recomp/gen/recomp_funcs.h": "6716815d1986d3b896c7efd13b64946b752e47e681f85f69dd3d99d176c55ab5",
   "src/recomp/gen/recomp_stubs_recovery.c": "6cbb4fafaed291d4b1854e7cd3926b8fc1ff46e17abde4bf77a30d536bddd5c1",
   "src/recomp/gen/recomp_types.h": "edc184333db517bfd74a752b4d177828659db62e72f34811daff86cc1ef3b720",
-  "src/recomp/gen/shaders/nv2a_vsh_programs.c": "c71e02ec118a05a3c548cd1514fe52e3b194ec3d4b915032ac21b445ae8b54d4",
-  "src/recomp/gen/shaders/nv2a_vsh_programs.h": "6ffdf27eb474bdc8a4e273803ab522eb9fdf4bc14556ee7b7a219a2dc13b1254",
+  "src/recomp/gen/shaders/nv2a_vsh_programs.c": "ca6677fda89b6e60d32e76ea277c6cb46665c0454fce1698a959e93635debd27",
+  "src/recomp/gen/shaders/nv2a_vsh_programs.h": "12d5445b2cc50cf03632f29ccd9e270cb209b9059b92d6623344bdd0f2786edd",
   "src/recomp/recovered/recovered.c": "5e2b356985ddc8edaf7436852cba2bc413632bfb05f7250a7e1cac1df2970f58",
   "src/recomp/recovered/recovered_11c1_test.c": "1986aac2eecbc93748c3677d9fea752e6bbd2179a14a4eb75fac20a7f14cc437",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
@@ -863,6 +863,14 @@
     "src/recomp/gen/recomp_funcs.h"
    ],
    "reason": "xboxrecomp af78da4: late-owner aliases that are complete gap routines keep their own body; 123 of the 124 functions v0.16.0 discovery had made fatal alias wrappers (121 unwind handlers, 0x18708E, 0x181009) are direct bodies again; 5,626 to 5,754 generated functions, fatal late-owner aliases 274 to 139"
+  },
+  {
+   "date": "2026-10-28",
+   "files": [
+    "src/recomp/gen/shaders/nv2a_vsh_programs.c",
+    "src/recomp/gen/shaders/nv2a_vsh_programs.h"
+   ],
+   "reason": "Q11 (R5): the vertex-program corpus moved only in its recorded translator-source and tool hashes; program bytes identical (gen-shaders.py --check byte-identical)"
   }
  ]
 }
