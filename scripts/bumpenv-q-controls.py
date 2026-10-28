@@ -50,7 +50,8 @@ x8-swizzle-dropped and x8-cpu-alpha-kept. The per-zeta depth gate
 (tests/test_zeta_stream*.c, tests/zeta_stream_cases.h) adds two, `--control
 zeta`: zeta-vk-shared and zeta-cpu-shared. Q5a adds three lighting controls,
 `--control light`: light-modelview-normal, light-always-normalize and
-light-direction-unnormalized. Vulkan cases need the software
+light-direction-unnormalized. Q5b adds three, `--control spec`:
+spec-pass-through, spec-lit-ignored and spec-unlit-zeroed. Vulkan cases need the software
 ICD, which the loader ignores in an elevated process, so from an elevated
 session run this script through `just controls <name>` (scripts/run-limited.py).
 
@@ -595,6 +596,44 @@ for _spec in LIGHT_CONTROLS.values():
     _spec["light_vk_still_green"] = list(_spec["light_still_green"])
 CONTROLS.update(LIGHT_CONTROLS)
 
+# Q5b: the executor's fixed-function oD1. The CPU half cannot observe oD1 (it
+# runs no combiner on fixed-function draws), so only the Vulkan half decides.
+SPEC_CONTROLS = {
+    "spec-pass-through": {
+        "title": "oD1 is vertex attribute 4 whatever lighting and SPECULAR_ENABLE say",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "    ff_specular(index, c);\n",
+             "    fetch_attr(&s_gpu.attr[4], index, c);\n"),
+        ],
+        "spec_vk_cases": ["lit_d1_spec_off", "lit_d1_nl_negative"],
+        "spec_vk_still_green": ["pc_unlit_d1", "pc_unlit_d0", "lit_d0_separate"],
+    },
+    "spec-lit-ignored": {
+        "title": "lit oD1 keeps attribute 4's rgb with SPECULAR_ENABLE on",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "} else if ((s_reg[0x0294 / 4] & 1) && lit_applies()) {",
+             "} else if (0) {"),
+        ],
+        "spec_vk_cases": ["lit_d1_nl_negative"],
+        "spec_vk_still_green": ["lit_d1_spec_off", "pc_unlit_d1"],
+    },
+    "spec-unlit-zeroed": {
+        "title": "unlit oD1 is zeroed as if lit",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "} else if ((s_reg[0x0294 / 4] & 1) && lit_applies()) {",
+             "} else if (s_reg[0x0294 / 4] & 1) {"),
+        ],
+        "spec_vk_cases": ["pc_unlit_d1"],
+        "spec_vk_still_green": ["lit_d1_spec_off", "lit_d1_nl_negative"],
+    },
+}
+for _spec in SPEC_CONTROLS.values():
+    _spec["spec_vk_markers"] = ["oD1 (final combiner D = V1) equals the hand-derived literal"]
+CONTROLS.update(SPEC_CONTROLS)
+
 # CTest prefixes for each case group, in the order the groups are run.
 RED_GROUPS = [
     ("cpu_cases", "cpu_markers", "jsrf_bumpenv_q_cpu_"),
@@ -611,6 +650,7 @@ RED_GROUPS = [
     ("zeta_vk_cases", "zeta_vk_markers", "jsrf_zeta_stream_vk_"),
     ("light_cases", "light_markers", "jsrf_light_stream_"),
     ("light_vk_cases", "light_vk_markers", "jsrf_light_stream_vk_"),
+    ("spec_vk_cases", "spec_vk_markers", "jsrf_spec_stream_vk_"),
 ]
 GREEN_GROUPS = [
     ("cpu_still_green", "jsrf_bumpenv_q_cpu_"),
@@ -626,6 +666,7 @@ GREEN_GROUPS = [
     ("zeta_vk_still_green", "jsrf_zeta_stream_vk_"),
     ("light_still_green", "jsrf_light_stream_"),
     ("light_vk_still_green", "jsrf_light_stream_vk_"),
+    ("spec_vk_still_green", "jsrf_spec_stream_vk_"),
 ]
 
 
@@ -827,7 +868,8 @@ TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test",
            "jsrf_wclip_stream_test", "jsrf_wclip_stream_vk_test",
            "jsrf_x8alias_stream_test", "jsrf_x8alias_stream_vk_test",
            "jsrf_zeta_stream_test", "jsrf_zeta_stream_vk_test",
-           "jsrf_light_stream_test", "jsrf_light_stream_vk_test"]
+           "jsrf_light_stream_test", "jsrf_light_stream_vk_test",
+           "jsrf_spec_stream_vk_test"]
 
 
 def _is_link(path):
@@ -1188,7 +1230,7 @@ def run_control(name, workdir, shared_before, owned=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--control", default="all",
-                    choices=sorted(CONTROLS) + ["all", "texgen", "wclip", "x8", "zeta", "light"])
+                    choices=sorted(CONTROLS) + ["all", "texgen", "wclip", "x8", "zeta", "light", "spec"])
     ap.add_argument("--workdir", default=None,
                     help="private scratch directory to CREATE; it must not exist "
                          "yet (default: a fresh tmp-bumpenv-controls-<token> "
@@ -1243,6 +1285,8 @@ def _run_controls(args, owned):
         names = sorted(ZETA_CONTROLS)
     elif args.control == "light":
         names = sorted(LIGHT_CONTROLS)
+    elif args.control == "spec":
+        names = sorted(SPEC_CONTROLS)
     else:
         names = [args.control]
     ok = True
