@@ -8572,3 +8572,183 @@ computes the vertex colour for both.
 **State.** Q5a is done locally; nothing is pushed, there are no push receipts, and the related
 toolkit's `upstream` and `nworkers` push URLs stay DISABLED. Next is Q5b, **[stronger model or
 owner]**: report and stop.
+
+### §31.89 — Q5b stage 1: fixed-function specular derivation and the independent gate (2026-10-28)
+
+**Scope.** This is the derivation and the deciding gate only. There is NO production change, no
+admission change and no toolkit change: Q5b stays IN PROGRESS. The gate is RED on the current working tree so a later
+session can implement against literals it may not edit.
+
+**Pinned primary source.** xemu `478b4f496102379c7eaa7f3ec10e714a703c4300` (already checked out,
+clean, at `C:\Users\logic\Repos\xemu`; read for facts only, no code copied). Files read, with
+SHA-256:
+
+| File | SHA-256 |
+|---|---|
+| `hw/xbox/nv2a/pgraph/glsl/vsh-ff.c` | `4F830C949D7DC1BED958E71381D96E6DBE8B1C28F6BB8FA758094DBC32CA3BC7` |
+| `hw/xbox/nv2a/pgraph/glsl/vsh.c` | `FD842023C657540839D42C58E1BADCA0D0FA4A61C5EAD82455A36F49BFD1C549` |
+| `hw/xbox/nv2a/pgraph/glsl/psh.c` | `C84AEDA21D6F5897B6131C5FA1B6994AB935A21FDDAF624DE102D877C1FB9757` |
+| `hw/xbox/nv2a/pgraph/pgraph.c` | `8E26F34E521C7D0224D450628256CBDE20BFE1BBC6E168F56A846A3892188913` |
+| `hw/xbox/nv2a/nv2a_regs.h` | `1F6CA6F7684657388AA41505D13C38F5FE7FBCB212B2D81A5D9FA6FE48037C38` |
+| `hw/xbox/nv2a/pgraph/psh_regs.h` | `DFC1B3EC16ABF1F106E794AF028C5AC9F775333230D05572BB3B4057F96B0310` |
+| `hw/xbox/nv2a/pgraph/vsh_regs.h` | `C54F3D24803644BEBE0B56B14617ED4C5FA87F0D17E17DAC21CED08F25C6B582` |
+
+**The rule, verified line by line.** The packet's sketch was treated as unproven, and three of its
+statements did NOT survive the pin. The verified rule:
+
+- V1. Lighting on: `oD1 = vec4(0.0, 0.0, 0.0, specular.a)` (`vsh-ff.c:288`), where `specular` is
+  vertex attribute 4 and `diffuse` is attribute 3 (`vsh-ff.c:76-77`).
+- V2. The per-light specular term is `lightSpecularColor(i) * attenuation * pf`
+  (`vsh-ff.c:379`), with `nDotVP = max(0, N.L)` (`:332`), `nDotHV = max(0, N.H)` (`:340`) and
+  `pf = 0` when either is 0, else `pow(nDotHV, specularPower)` (`:370-376`). For an INFINITE light
+  attenuation is exactly 1.0 (`:330`). So the term is 0 whenever N.L <= 0 or N.H <= 0, and that
+  needs NO specular parameter.
+- V3. `SET_SPECULAR_ENABLE` (`0x03B8`) clear forces `oD1 = vec4(0,0,0,1)` (`vsh-ff.c:424-426`),
+  written by `pgraph.c:1647-1649` into CSV0_C bit 16 (`vsh.c:118-119`). It is applied AFTER the
+  lighting block, so it overrides V1's alpha and every per-light term.
+- V4. `SEPARATE_SPECULAR` is `SET_LIGHT_CONTROL` (`0x0294`) bit 0 (`nv2a_regs.h:907`,
+  `pgraph.c:1082-1085`). SET skips the `!separate_specular` branch (`vsh-ff.c:428-439`), so nothing
+  is added into oD0 and oD1 keeps the lighting block's value. CLEAR (with lighting on) adds
+  `oD1.xyz` into `oD0.xyz` and then sets `oD1 = specular` (the vertex attribute) — P5.
+- V5. Lighting off: `oD0 = diffuse; oD1 = specular` (`vsh-ff.c:254-256`), both attributes passed
+  through; V3/V4 still run afterwards.
+- V6. The vertex specular attribute never enters LIT oD1.rgb: the lighting block writes oD1.rgb from
+  `lightSpecular` only (`vsh-ff.c:400-413`), and `SET_COLOR_MATERIAL` (`0x0298`) = 0 selects
+  MATERIAL_COLOR_SRC_MATERIAL, which uses the light colour alone (`vsh-ff.c:401-404`). Attribute 4
+  appears in the lighting block only as V1's alpha and in the two MATERIAL_COLOR_SRC_SPECULAR cases.
+- V7. Observer: `fragColor.rgb = D + mix(C, B, A)` (`psh.c:604-607`; the CPU reference
+  `nv2a_combiner.c:186-230` is the same form). CW0 packs `A<<24|B<<16|C<<8|D` (`psh.c:1543-1551`);
+  register nibble 4 = V0 = oD0 and 5 = V1 = oD1 (`psh_regs.h:74-75`, `psh.c:327-330`,
+  `vec4 v0 = pD0; vec4 v1 = pD1;` at `psh.c:1085-1086`); CW1's G field is bits 8-15 and `0x10`
+  selects alpha (`psh.c:284`, `psh_regs.h:130`). With A = B = 0 the combiner emits exactly D + C. A
+  zero COMBINER_CONTROL stage count still runs the final stage (`psh.c:1605`).
+
+**Where the pin contradicts the sketch.** (a) The specular term is `pow(nDotHV, specularPower)`,
+NOT `clamp((N.H + L)/(M*N.H + N), 0, 10000)`; `specularPower` comes from
+`reconstruct_specular_power` over six `SET_SPECULAR_PARAMS` words (`pgraph.c:1873-1928`), so the
+parameters feed only the EXPONENT. (b) No 10000 clamp exists anywhere in the pinned `vsh-ff.c`; the
+sketch's clamp is UNVERIFIED and is not asserted. (c) The packet's "SPECULAR_ENABLE off gives
+oD1 = (0,0,0,1)" is right, but it is an unconditional override outside the lighting branch, which
+also rewrites oD1 on the lighting-OFF path.
+
+**Retail light-0 witness (derived from committed manifest data, no new run).**
+`config/nv2a-runtime-witnessed-methods.json` (run `20261008-001451-422-title008-witness-0298`, the
+L52/§31.62 witness) records light 0 as: specular `0x1018..0x1020` = 0; `0x1024` = `7149F2CA` =
+1.0e30; half vector `0x1028..0x1030` = `3E0CAE50 3EB5D37D BF6CB6C2` = (0.13738370, 0.35512915,
+-0.92466366); direction `0x1034..0x103C` = `3E821555 3F282109 BF35C3A0` = (0.25406900, 0.65675408,
+-0.71001625). `normalize(dir + (0,0,-1))` = (0.13738413, 0.35513024, -0.92466649), matching the
+delivered half vector to 2.8e-6. So **JSRF's H is normalize(L + VPeye) with the viewer direction
+(0,0,-1)** — the LOCALEYE form — even though the light is INFINITE. That is one observed state, not
+a rule, and this gate does not depend on it.
+
+**Admitted-method inventory (toolkit `e10087e`, `src/nv2a/nv2a_method_table.c`, class 0x97).**
+Present: `0x0288`/`0x028C` (final CW0/CW1), `0x0294`, `0x0298`, `0x0314`, `0x03A4`, `0x03B4`,
+`0x03B8`, `0x03BC`, `0x0480-0x04BC`, `0x0580-0x05AC`, `0x0680-0x06BC`, `0x0A10-0x0A18`,
+`0x1000-0x103C` (light 0, including specular `0x1018`, half vector `0x1028`, direction `0x1034`),
+`0x1720/28/2C/30`, `0x1760/68/6C/70`, `0x17FC`, `0x1810`, `0x1B0C`, `0x1E20`, `0x1E60`, `0x1E70`,
+`0x1E78`, `0x1E94`. **ABSENT: `0x09E0..0x09F4`** — the table goes `0x09D0..0x09DC` then
+`0x09F8`/`0x09FC`. A stream carrying them is rejected whole (L39).
+
+**Archived-witness scan.** `jsrf_run.log` in the four `20261021-*-d4-coverage-*-vk` runs and in
+`20261027-211411-161-keyscript-q5a-light-e2e-vk`, grepped for `method=09(E[0-9A-F]|F[0-4])` and for
+`[PFIFO] (reject|still rejecting|admit-unknown)`: **0 hits in every run**. Log SHA-256:
+`7CBA48A2D4B746482845569183FEFF880564D15EA26CAE06D36462C3EA223A7F` (e2e),
+`938ED1EAB2098A3AEB927A9F3FA3A1C5EFF0C6D158340ACCF16EA9E33EA9581D` (skate),
+`F6F6D0BA580F8824D2F66397CA5EEC2292728D70E32F9421EC111D397904CDC8` (gameplay),
+`C4A6A0A4C629AF7654175293AA3446BF31012E41EB4271E905E4267BB69C86BE` (gum-tutorial),
+`F69155FBFD847A4DFD900FE57572209AC013B36D5CB401CC8CDFF456F2F33223` (q5a-light). This is a
+bounded observation, NOT an absence claim: these runs were not instrumented to submit those
+methods, and the `20261008-001451-422` witness run itself is no longer in `logs/runs` (only its
+per-method lines survive in the committed manifest).
+
+**Why no new witness run was made.** The shared checkout is not writable from this packet's
+sandbox (`logs/`, `saves/` and the repo root all refuse creation), so `scripts/key-script-run.py`
+could not archive a run. Rather than fake one, the derivation plus the admission dependency is
+delivered, as the packet's fallback clause allows.
+
+**The gate (game, written before any implementation, UNCHANGED thereafter).** New files only:
+`tests/spec_stream_fixture.{h,c}`, `tests/spec_stream_cases.h`, `tests/test_spec_stream.c`,
+`tests/test_spec_stream_vk.c`, plus their `CMakeLists.txt` registration. Five cases per half, ten
+tests: `jsrf_spec_stream_{pc_unlit_d1,pc_unlit_d0,lit_d0_separate,lit_d1_spec_off,lit_d1_nl_negative}`
+and the `_vk_` halves.
+
+The fixture is `light_stream_fixture.c`'s harness plus the register combiners: `0x1E60` = 0 turns
+them on, `0x1E70` = 0 and `0x1E78` = 0 leave no stages, `0x0288` carries the observer word and
+`0x028C` = `0x00001400` reads V0's alpha. Attribute 3 (diffuse) is `0xFF00FF00` and attribute 4
+(specular) is `0xFFFF00FF`, both deliberately loud so a pass-through defect is unmistakable. No
+`0x09E0` word is emitted.
+
+Dyadic constants: S = (0.5, 0.5, 0.5), A = (0.0625, 0.0625, 0.125), D = (0.25, 0.375, 0.25),
+light specular (1,1,1), alpha 0.75, n = (0,0,-1) with identity model-view and inverse model-view,
+so n.e = -0.5 and the L82 facing-away flip does NOT apply. Truncation and round-to-nearest agree on
+every channel (0.5625*255 = 143.4375, 0.625*255 = 159.375, 0.8125*255 = 207.1875, 0.9375*255 =
+239.0625, 0.875*255 = 223.125, 0.75*255 = 191.25).
+
+| Case | State | Vulkan literal (derivation) | CPU literal |
+|---|---|---|---|
+| `pc_unlit_d1` | lighting 0, spec 1, D1, L = H = (0,0,-1) | `0xFFFF00FF` (V5: oD1 = attribute 4) | `0xFF00FF00` LIMITATION |
+| `pc_unlit_d0` | as above, D0 | `0xFF00FF00` (V5: oD0 = attribute 3) | `0xFF00FF00` |
+| `lit_d0_separate` | lighting 1, spec 1, D0, n.L = 1 | `0xBFCFEFDF` (V4: S+A+D, nothing added) | `0xBFCFEFDF` |
+| `lit_d1_spec_off` | lighting 1, **spec 0**, D1, n.L = 1 | `0xBF000000` (V3: rgb 0; alpha is V0's, 0.75) | `0xBFCFEFDF` LIMITATION |
+| `lit_d1_nl_negative` | lighting 1, spec 1, D1, L = H = (0,0,+1) | `0xBF000000` (V1/V2: both cosines 0) | `0xBF8F8F9F` LIMITATION |
+
+**CPU limitation.** The CPU fixed-function rasteriser does not run the combiners: `raster_triangle`
+writes the lit vertex colour directly, and only the vertex-PROGRAM path (`raster_xf_triangle` ->
+`xf_rows`) reaches `nv2a_rc_eval` (`nv2a_pb_exec.c:3697`). So the CPU half cannot observe oD1 and
+carries separate labelled literals, following the texgen gate's `cpu_differs` precedent; it is a
+plumbing/positive-control check, and the Vulkan half decides.
+
+**Named outcomes on pinned toolkit `e10087e` (this packet's own fixtures-only build).**
+`python -X utf8 scripts\ctest-limited.py --build-dir <scratch>\build -R ^jsrf_spec_stream_`:
+**8/10 pass, 2 fail, none skipped**, on llvmpipe (LLVM 23.1.2). The two RED tests, both at all
+three probes on the named assertion "oD1 (final combiner D = V1) equals the hand-derived literal":
+
+- `jsrf_spec_stream_vk_lit_d1_spec_off`: got `0xBFFF00FF`, want `0xBF000000`.
+- `jsrf_spec_stream_vk_lit_d1_nl_negative`: got `0xBFFF00FF`, want `0xBF000000`.
+
+`0xBFFF00FF` is exactly the vertex specular attribute `0xFFFF00FF` with V0's alpha — the
+pass-through the packet described. The batch's `extra[0].specular` is `0xFFFF00FF` (diagnostic,
+printed not asserted). Positive controls pass: `pc_unlit_d1` reads `0xFFFF00FF` and `pc_unlit_d0`
+reads `0xFF00FF00`, so the observer really distinguishes oD1 from oD0; `lit_d0_separate` reads
+`0xBFCFEFDF`, so oD0 is unaffected by a live specular term. CPU literals all match:
+`0xFF00FF00`, `0xFF00FF00`, `0xBFCFEFDF`, `0xBFCFEFDF`, `0xBF8F8F9F`.
+
+**Q5a unchanged.** `-R ^jsrf_light_stream_`: 14/14 pass, none skipped.
+
+**PENDING, and exactly what unblocks each** (full text in `tests/spec_stream_cases.h`):
+
+- P1 `pf > 0` with the infinite half vector. Blocked on admitting `0x09E0..0x09F4` from a genuine
+  runtime witness, then regenerating with `scripts/gen-nv2a-method-inventory.py --witness` (L44).
+- P2 the N.H gate alone (n.L > 0, n.H <= 0). NOT admission-blocked: H is an admitted
+  `0x1028..0x1030` word and can differ from L. Deferred only so this gate's committed literals are
+  not edited after the fact; it can be added as a new case.
+- P3 the 10000 clamp. UNVERIFIED — no such literal in the pinned source. Do not assert it.
+- P4 LOCALEYE (bit 16). Needs a delivered EYE_POSITION and the VPeye branch decided; the executor
+  stores `0x0294` but `lit_color` never reads it.
+- P5 non-separate specular. Deliverable through admitted methods; deferred to keep this gate's
+  scope to the named defect.
+- P6 oD1 alpha and bit 17 (`ALPHA_FROM_MATERIAL_SPECULAR`, `nv2a_regs.h:909` ->
+  `ignore_specular_alpha` at `vsh.c:122-124` -> `oD1.a = 1` at `vsh-ff.c:440-444`).
+- P7 colour-material specular source (`0x0298` bits 6-7 = 2). Deliverable; deferred because it
+  changes what "lit oD1" means.
+
+**What it does not prove.** Hardware fidelity. That JSRF draws lit batches with attribute 4 bound
+(pbcov does not record that), so the in-game frequency of these cases is UNKNOWN — the cases are
+reachable through admitted methods, not measured in a retail stream. The `pf` term, LOCALEYE,
+non-separate specular, colour material, local/spot lights, more than one light, fog's effect on
+oD1.a, two-sided/back materials, and vertex-program batches. Agreement between the two renderers
+proves nothing, because the executor computes the vertex colour for both.
+
+**Environment limitations of this packet.** `just check`'s checkers mostly cannot run in a packet
+worktree: `check-generation-provenance`, `patch-generated`, `check-entry-extents`, `check-stack-depth`,
+`check-dead-gotos`, `check-sse-unordered`, `check-dispatch-table` need `src/recomp/gen`,
+`src/recomp/recovered` or `game/mygame_analysis.json`, which a fixtures-only worktree does not have;
+`check-horizon-ledger` and `check-stop-chain` need archived runs that are not present. With
+`XBOXRECOMP_DIR` set, `check-merge-structure`, `check-override-drift`, `check-agent-docs` and
+`check-disk-gate` pass. `git diff --check` is clean.
+
+**State.** Q5b is IN PROGRESS, not done. Nothing is pushed. The gate is RED on purpose and must not
+be edited by the implementation session; the next step is Q5b stage 2, which implements lit
+oD1 = (0,0,0,·), the N.L / SPECULAR_ENABLE gating and the separate-specular guard against these
+fixed literals, and adds mutation controls. Stage 1b (admitting `0x09E0..0x09F4` from a witness)
+comes before the `pf` term.

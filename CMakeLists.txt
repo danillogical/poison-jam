@@ -724,6 +724,36 @@ if(BUILD_TESTING)
                        "registered off Windows -- it drives the Win32 guest-memory layout and "
                        "the commit consumer, as jsrf_zeta_stream_* does")
     endif()
+    # ── NV2A fixed-function SPECULAR, the committed-stream gate (test first) ─────────────────
+    # Real pushbuffer words through nv2a_submit_pending (RECOMP_PB_EXEC=1) draw one untextured
+    # lit quad with the register combiners programmed so the final combiner emits either oD1
+    # (D = V1) or oD0 (C = V0). That is the only way to observe the specular output. Each named
+    # pixel read back from the guest surface must equal a hand-derived literal
+    # (tests/spec_stream_cases.h): lit oD1.rgb is 0 when SET_SPECULAR_ENABLE is off and 0 when
+    # N.L <= 0, and with SEPARATE_SPECULAR set oD0 is the Q5a lighting result unchanged. The
+    # cases that need SET_SPECULAR_PARAMS (0x09E0..0x09F4) are PENDING: the walk does not admit
+    # those methods, so they cannot be delivered without a runtime witness. The Vulkan half
+    # (jsrf_spec_stream_vk_*) replays the executor's own batch into the production vb_draw and
+    # combiner and is the deciding half; the CPU fixed-function rasteriser has no combiners, so
+    # its cases carry separate labelled CPU literals. One process per case.
+    set(SPEC_STREAM_CASES pc_unlit_d1 pc_unlit_d0 lit_d0_separate lit_d1_spec_off lit_d1_nl_negative)
+    if(WIN32)
+    add_executable(jsrf_spec_stream_test tests/test_spec_stream.c
+        tests/spec_stream_fixture.c)
+    target_include_directories(jsrf_spec_stream_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+        ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_link_libraries(jsrf_spec_stream_test PRIVATE xboxrecomp)
+    foreach(_case IN LISTS SPEC_STREAM_CASES)
+        add_test(NAME jsrf_spec_stream_${_case}
+                 COMMAND jsrf_spec_stream_test --case ${_case})
+        set_tests_properties(jsrf_spec_stream_${_case} PROPERTIES TIMEOUT 120)
+    endforeach()
+    else()
+        message(STATUS "jsrf_spec_stream_* (the NV2A specular committed-stream gate) is not "
+                       "registered off Windows -- it drives the Win32 guest-memory layout and "
+                       "the commit consumer, as jsrf_light_stream_* does")
+    endif()
     # This one runs the pushbuffers through the Direct3D 11 back end and exits 0 after printing
     # SKIP when it cannot create a device, which off Windows is always: a green no-op, so it is
     # not registered there (jsrf_gpu_backend_parity_vk is the Vulkan sibling that runs).
@@ -1426,6 +1456,47 @@ if(BUILD_TESTING)
         endif()
         else()
             message(STATUS "jsrf_light_stream_vk_* is not registered off Windows -- its "
+                           "committed-stream fixture drives the Win32 guest-memory layout")
+        endif()
+        # ── NV2A fixed-function SPECULAR, the committed-stream gate's Vulkan half ───────────────
+        # As the lighting half: the batch the production executor built from the committed stream
+        # is captured at the back-end seam and handed unchanged to the production vb_draw
+        # (#included with XBR_VK_BACKEND), which runs the production combiner. The pixel read back
+        # after vb_flip must equal the hardware literal from tests/spec_stream_cases.h. This half
+        # is the DECIDING one: the CPU fixed-function rasteriser has no combiners.
+        set_source_files_properties(tests/test_spec_stream_vk.c PROPERTIES
+            OBJECT_DEPENDS
+            "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c;${XBOXRECOMP_DIR}/src/video/nv2a_vk_rc_coverage.h")
+        if(WIN32)
+        add_executable(jsrf_spec_stream_vk_test tests/test_spec_stream_vk.c
+            tests/spec_stream_fixture.c)
+        add_dependencies(jsrf_spec_stream_vk_test xbox_video)
+        target_include_directories(jsrf_spec_stream_vk_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a ${XBOXRECOMP_DIR}/src/video
+            ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_spec_stream_vk_test PRIVATE xboxrecomp ${CMAKE_DL_LIBS})
+        if(JSRF_VK_TEST_ICD)
+            file(TO_NATIVE_PATH "${JSRF_VK_TEST_ICD}" _vk_icd_spec)
+            set(_spec_vk_env
+                "VK_DRIVER_FILES=${_vk_icd_spec};VK_ICD_FILENAMES=${_vk_icd_spec};${JSRF_VK_TEST_SELECT};RECOMP_VK_PIPELINE_CACHE=off")
+            foreach(_case IN LISTS SPEC_STREAM_CASES)
+                add_test(NAME jsrf_spec_stream_vk_${_case}
+                         COMMAND jsrf_spec_stream_vk_test --case ${_case})
+                set_tests_properties(jsrf_spec_stream_vk_${_case} PROPERTIES TIMEOUT 300
+                    SKIP_RETURN_CODE 77 ENVIRONMENT "${_spec_vk_env}")
+            endforeach()
+        else()
+            foreach(_case IN LISTS SPEC_STREAM_CASES)
+                add_test(NAME jsrf_spec_stream_vk_${_case}
+                         COMMAND jsrf_spec_stream_vk_test --skip "XBR_VK_SW_ICD is not set")
+                set_tests_properties(jsrf_spec_stream_vk_${_case} PROPERTIES TIMEOUT 20
+                    SKIP_RETURN_CODE 77)
+            endforeach()
+        endif()
+        else()
+            message(STATUS "jsrf_spec_stream_vk_* is not registered off Windows -- its "
                            "committed-stream fixture drives the Win32 guest-memory layout")
         endif()
         # ── D4 Vulkan rc-refusal coverage, the real-device deciding gate ─────────────────────
