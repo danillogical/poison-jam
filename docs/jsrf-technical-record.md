@@ -8868,3 +8868,96 @@ right behaviour: an indirect call there would be a defect elsewhere, and it abor
 logged. The dispatch comment's "owner 0x00168EC0" is the late-owner rule's label (the next function
 start), not the real owner, which is `0x1688B0`; it is cosmetic. **No code change.** L65 is
 updated.
+
+### §31.92 — Q11 (R5): one vertex-program input-mask rule (2026-10-28)
+
+**What.** The input mask of a vertex program was derived three times (`decode_program`, `derived_mask`,
+`program_info` in `scripts/find-vertex-programs.py`). Two of the three now share one rule; the third
+is pinned to it by a test.
+
+**Change.**
+- Toolkit `ebf62bb`: `nv2a_vsh_ins_input_mask` (inline in `src/video/nv2a_vsh_hlsl.h`) is the one
+  input-mask rule. The interpreter's `decode_program` (`src/kernel/nv2a_vsh_interp.c`) and the host
+  tool's `derived_mask` (`nv2a_vsh_hlsl_tool.c`) call it.
+- `scripts/find-vertex-programs.py` keeps its Python decode: it scans the whole XBE at every alignment,
+  and a tool spawn per candidate would be a new runtime dependency.
+
+**Gate (game `8a6cf39`).** `tests/test_vsh_mask_rule.py` (CTest `jsrf_vsh_mask_rule`) drives 300 seeded
+random programs through the host tool with a deliberately wrong `--mask`, so the tool reports the
+mask it implies, and requires `program_info` to agree with it on every program.
+
+**Verification.**
+- `just shaders` regenerated the corpus. A line diff against a saved copy showed only six provenance
+  lines changed (`source.nv2a_vsh_hlsl.h`, `source.nv2a_vsh_hlsl_tool.c`, `tool.sha256`, each in the
+  `.c` and the `.h`); every program is byte-identical.
+- `gen-shaders.py --check` is byte-identical (128 programs, 126 distinct, 0 collisions).
+- `jsrf_vsh_*` 17/17 un-elevated.
+- Decode mutation: changing `mac <= 12` to `<= 11` made `jsrf_vsh_mask_rule` fail (Mac scratch build).
+- Full CTest green after the provenance and preservation-baseline re-records (game `d69cd61`).
+- Trap: the scp'd LF sources had to be re-checked-out as CRLF and the corpus regenerated again before
+  recording, because provenance hashes are CRLF (plan, "Provenance").
+
+**What it does not prove.** That the three decodes agree on programs outside the 300 random ones and
+the 128 retail programs. The tool's text-replacement Vulkan decorations are out of scope and still
+duplicate logic.
+
+### §31.93 — Q6: the upstream guest-CPU gate reaches JSRF's title (2026-10-28 to 2026-10-29)
+
+**What.** §31.83 recorded that `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1` never reached the title.
+A worker-hard diagnosis from frozen stacks, confirmed on the laptop, found two defects. With both
+fixed the exploratory e2e completes. Serial mode (L34) is not retired.
+
+**Defect 1: recovered and relifted code had no back-edge hooks.** Upstream's guest lock hands the CPU
+over only at kernel calls and `RECOMP_BACK_EDGE` hooks. The full pass emits the hooks
+(`--backedge-yield`), but `scripts/recover-functions.py`, `scripts/relift-selected.py` and
+`scripts/repair-hidden-entries.py` built `FunctionTranslator` without `backedge_yield`. JSRF's worker
+at `0x13B180` spins on `[0x25EFC0]` (`0x13B190` to `je 0x13B1A2`, laptop disassembly) with no kernel
+call, so under the lock it kept the CPU and boot stopped at the third thread.
+- *Gate (game `7c626e2`, committed red):* `scripts/check-back-edges.py`, run by `just check` and as
+  CTest `jsrf_check_back_edges`; it found 1,370 bare back edges, 1,368 of them in `recovered.c`.
+- *Fix (game `f239648`):* `backedge_yield=True` in the three scripts; relift, recovery and ABI deltas
+  rerun. Only hook insertions changed: `recovered.c` +1,371 (including 3 before existing
+  `RECOMP_JUMP_TRAP`s), `recomp_0005.c` +2, the 11c1 seed +56. All 4,973 back edges are hooked. The 11c1
+  harness defines the hooks' runtime as inert stubs. Provenance and baseline re-recorded.
+- *Default mode unaffected:* CTest 295/295; strict smoke `20261028-161324-774-q6-hooks-smoke`; Vulkan
+  e2e `20261028-161442-010-keyscript-e2e-vk-hooks` (icall 0, fatal 0, validation 0, pause map as
+  before).
+
+**Defect 2: upstream's lock deadlocked on `NtSuspendThread`.** JSRF's main thread suspends a worker at
+boot (`sub_0013B0E0` to `sub_00147DAC`, ordinal 231). `xbox_NtSuspendThread` did a raw host
+`SuspendThread`; a target holding a ticket stopped the FIFO queue forever, because a suspended holder
+never freed the CPU. This is upstream's code alone (identical at upstream `f0f8a46`), not one of the
+fork's kept divergences.
+- *Gate (toolkit `36b1122`, committed red):* `tests/guest_cpu` cases `suspend_queued` and
+  `suspend_holder`, each with a 2 s watchdog; both FAIL on Windows before the fix.
+- *Fix (toolkit `9e10a2e`, worker-hard):* `xbox_GuestCpuSuspend` / `xbox_GuestCpuResume` replace the
+  host calls in `NtSuspendThread` / `NtResumeThread`. A queued or self-suspended guest thread passes
+  its turn and parks until resumed. A holder is frozen by the host and its CPU goes to the queue; the
+  resume wins the CPU back through the queue before the thread continues. Lock off or a non-guest
+  target uses the host calls as before.
+- *Left as is:* `KeSuspendThread` / `KeResumeThread` (`kernel_bridge.c`) keep the old defect
+  (follow-up).
+- *Result:* the suspend gates pass in every completed run on Windows. Timing flakes in the guest_cpu
+  suite, 200 runs each, base vs fix: "on: ... holder yielded" 3 vs 6; "dispatch: ... barged back" 1 vs
+  1; "short call" 0 (3/100 in an earlier base sample) vs 1; the new setup check "suspend queued: B
+  waits behind A" 2/200. These are within the suite's existing noise; recorded, not fixed.
+
+**Runtime acceptance (exploratory, `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1`, Vulkan e2e).**
+- `20261028-170155-261-keyscript-e2e-vk-gate-q6b`: `script_ok: true`, outcome `keyscript_complete`,
+  all 71 steps, icall 0, fatal 0, 9,507 presents, `rc_fallback` 0, `dropped_tris` 8. Viewed frames: the
+  title animation (about 79 s) and Garage gameplay with the HUD (about 400 s) render normally.
+- Before: `20261028-154447-646-keyscript-e2e-vk-gate-q6` (defect 1 fixed only) reached threads #4 and
+  #5 but not the title; the §31.83 run never left thread #3.
+- Both fixes, default mode: CTest 295/295, `just tk-tests` ok, strict smoke
+  `20261028-213912-038-q6-lockfix-smoke`, Vulkan e2e `20261028-214031-430-keyscript-e2e-vk-lockfix`
+  (icall 0, fatal 0).
+
+**Correction to §31.83.** The 119/145 caller (`KeInsertQueueDpc` / `KeSetEvent`) is the host timer
+thread delivering the vblank ISR (`0x193C50`) and DPC (`0x193D90`), not a stuck guest thread. Vblank
+delivery was healthy.
+
+**What it does not prove.** Serial mode is NOT retired: retirement needs a D3D11 e2e and strict runs
+with the gate, and the deletion of `RECOMP_GUEST_SERIAL` and `RECOMP_BACKEDGE` (Q12); that is queue
+item Q6b. The gated run is exploratory and one run; the gate-on frames were viewed, not compared
+against a serial-mode run. No performance comparison was made. A host-frozen suspended holder can still
+stop inside a host lock or at DISPATCH (L88).

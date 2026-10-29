@@ -9,8 +9,8 @@ owns shortcuts; `config/stop-chain.json` owns stops.
 ## Current state (as of 2026-10-28)
 
 - D4 (BUMPENVMAP modes 6/7, then texgen and texture matrices, then records) is done (TR §31.84).
-- The xboxrecomp v0.16.0 catch-up is done (TR §31.83); serial guest mode (L34) stays because the
-  upstream guest-CPU gate fails to reach the title.
+- The xboxrecomp v0.16.0 catch-up is done (TR §31.83); serial guest mode (L34) stays as the default
+  until Q6b retires it (the upstream guest-CPU gate now reaches the title; see the 2026-10-28 Q6 line).
 - Strict smoke, Vulkan e2e and D3D11 e2e pass on the v0.16.0 tree (icall 0, fatal 0).
 - 2026-10-26, Q1: no upstream change (`upstream/main` is still v0.16.0 `f0f8a46`; 10 open upstream
   PRs, #265-#274, to recheck next week; #267 and #268/#269 touch owner-kept designs). The nworkers
@@ -41,7 +41,15 @@ owns shortcuts; `config/stop-chain.json` owns stops.
 - Toolkit `1c2096d` and game `58ea0ca` are published (receipts in TR §31.90).
 - 2026-10-28, Q7: `0x1688F3` is an internal label named by a coincidental data word; the fatal trap
   stays and no code changes (TR §31.91, L65).
-- The next item is Q6, which is marked [stronger model or owner].
+- 2026-10-28, Q11 (R5): one vertex-program input-mask rule shared by the interpreter and the host tool,
+  `find-vertex-programs.py` pinned to it by a test (toolkit `ebf62bb`, game `8a6cf39`, TR §31.92). The
+  corpus program bytes are unchanged.
+- 2026-10-28, Q6: the upstream guest-CPU gate reaches JSRF's title. Two defects fixed: recovered and
+  relifted code had no back-edge hooks (gate `7c626e2`, fix `f239648`), and upstream's lock deadlocked
+  on `NtSuspendThread` (gate `36b1122`, fix toolkit `9e10a2e`). Exploratory Vulkan e2e with
+  `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1` completes all 71 steps (TR §31.93, L34, L88). Serial
+  mode is NOT retired.
+- The next item is Q6b: retire serial mode (L34).
 - Older dated status paragraphs and the pre-approved R1-R5/N-series text moved to
   `docs/jsrf-operating-history.md`, section "Plan history moved on 2026-10-26".
 
@@ -65,7 +73,8 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
 - Prefer upstream's design in merge conflicts; re-express ours as a small separable delta.
 - Keep the fork's model vblank, the kmem arena, the APU IRQ path, APC deferral default-on (NT ordering)
   and the keyboard packet moving only on change.
-- Keep serial mode (L34), because upstream's guest-CPU lock plus gate fails to reach the title.
+- Try upstream's guest-CPU lock plus gate, then retire serial mode (L34). Serial mode stays the default
+  until the acceptance runs in Q6b pass.
 - The full list and the divergence inventory are in `docs/upstream-merge-playbook.md`.
 
 ## Done
@@ -104,6 +113,9 @@ Milestone names with their TR sections; details are in the TR.
 - **Q4 (N6c):** one depth surface per zeta, pinned (TR §31.87, L86).
 - **Q5a:** fixed-function lighting normal and light direction (TR §31.88, L82).
 - **Q5b stages 1-2:** fixed-function specular gate and oD1 routing; the pf term is ledgered (TR §§31.89-31.90, L87).
+- **Q11 (R5):** one vertex-program input-mask rule (TR §31.92).
+- **Q6:** the upstream guest-CPU gate reaches the title; back-edge hooks in recovered code and the
+  `NtSuspendThread` lock deadlock fixed (TR §31.93, L34, L88).
 
 ## Work queue (after the 2026-10-26 handoff)
 
@@ -147,12 +159,11 @@ cheap agent should not start them; it should report that they are next and stop.
 | # | Item | Size | Gate | Stop and ask if |
 |---|---|---|---|---|
 | Q1 | **Weekly upstream merge**, following `docs/upstream-merge-playbook.md`. If `HEAD..upstream/main` is empty, add a dated "no upstream change" line to Current state and take the next item. | 1–2 sessions | the playbook's gates | any playbook stop condition |
-| Q6 | **The upstream guest-CPU gate hangs at boot** (TR §31.83: `KeInsertQueueDpc`/`KeSetEvent` spin, no title in 300 s). Diagnose it before serial mode (L34) can retire. **[stronger model or owner]** | 1–2 | an exploratory e2e reaching the title with `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1` | always |
+| Q6b | **Retire serial mode (L34).** Owner direction already given ("try upstream, then retire ours"). Run a D3D11 e2e and a strict run with `RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1`, compare frames with the serial-mode runs, then make the gate and lock the default and delete serial mode (`RECOMP_GUEST_SERIAL`) together with Q12's deletions (including `RECOMP_BACKEDGE`). | 1–2 | D3D11 e2e and strict smoke with the gate: icall 0, fatal 0, frames match the serial runs; full CTest and `just tk-tests` green | any acceptance run fails (stop; do not delete serial mode) |
 | Q8 | **Is the texgen effect visible?** Capture the JSRF NORMAL_MAP stage-0 batches (`RECOMP_PB_COVERAGE=1`) and compare one scene with xemu (`scripts/xemu-oracle.py`). No fidelity claim without xemu. **[owner-assisted]** | 1 | viewed frames | xemu needs owner input |
 | Q9 | **Optional D4 step 8: an in-game boost/attract-demo comparison against xemu.** Boost needs spray cans, so it needs a route script or the owner playing. **[owner-assisted]** | 1–2 | viewed frames | always |
 | Q10 | **D5: plan the reJSRF-derived items** that the D3/D4 evidence shows apply (TR §31.55–31.56 table): ADXM exclusion, lighting gaps. Each becomes its own gated item. | planning | owner approval of the item list | always (it's a planning step) |
-| Q11 | **R5: reduce duplicated vertex-program decode logic** (`decode_program`, `derived_mask`, `find-vertex-programs.py` `program_info`). Low priority. | 1 | `gen-shaders.py --check` byte-identical corpus, V6 conformance green, a decode mutation rejected | the corpus bytes change |
-| Q12 | **Divergence clean-up after the next regeneration**: delete `RECOMP_BACKEDGE`, `xbox_inb/outb`, `usb_gamepad_output` and the `xbox_VblankAckHeld` stub (see the playbook's divergence inventory). | 1 | build, toolkit tests, full CTest, strict smoke | anything still references them at runtime |
+| Q12 | **Divergence clean-up after the next regeneration**: delete `RECOMP_BACKEDGE`, `xbox_inb/outb`, `usb_gamepad_output` and the `xbox_VblankAckHeld` stub (see the playbook's divergence inventory). `RECOMP_BACKEDGE` deletion now goes with Q6b, which removes serial mode. | 1 | build, toolkit tests, full CTest, strict smoke | anything still references them at runtime |
 
 ## Facts, tools and traps
 

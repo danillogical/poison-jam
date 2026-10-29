@@ -31,7 +31,7 @@ Verify the `DISABLED` push URLs with `git remote -v` before anything else.
   - Keep the APU IRQ path.
   - Keep APC deferral default-on with NT ordering (JSRF's ADX poller needs it; L74).
   - Keep the keyboard packet moving only on change.
-  - Keep serial mode (L34): upstream's guest-CPU lock plus gate (`RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1`) was tried and does not reach the title.
+  - Keep serial mode (L34) as the default until plan item Q6b retires it: upstream's guest-CPU lock plus gate (`RECOMP_DISPATCH_GATE=1 RECOMP_GUEST_LOCK=1`) now reaches the title (TR §31.93), and the owner's direction is to try upstream, then retire ours.
 
 ## Stop and ask the owner
 
@@ -132,7 +132,8 @@ Clear stale analysis JSON first. Keep the disasm settings identical to last time
 3. Classify every new env switch in `scripts/jsrf_run_profile.py` and `docs/jsrf-run-profiles.md` as strict-safe, exploratory or observation.
 4. Re-record provenance: `python -X utf8 scripts\check-generation-provenance.py --write`.
 5. Re-record the baseline: `python -X utf8 scripts\update-generated-baseline.py`.
-6. Commit.
+6. Keep `backedge_yield=True` in the lifting scripts (`scripts/recover-functions.py`, `scripts/relift-selected.py`, `scripts/repair-hidden-entries.py`); `jsrf_check_back_edges` fails otherwise (TR §31.93).
+7. Commit.
 
 ## 10. Gates
 
@@ -141,6 +142,7 @@ Clear stale analysis JSON first. Keep the disasm settings identical to last time
 3. `just ctest-limited --output-on-failure`: the full limited CTest (241 tests on 2026-10-26; the
    count grows, and any failure or skip is the gate). Never use `|` in `-R`.
 4. All D4 and Q gates green with none skipped: `jsrf_bumpenv_*`, `jsrf_pbcov_*`, `jsrf_texgen_stream_*`, `jsrf_wclip_stream_*`, `jsrf_x8alias_stream_*`, `jsrf_zeta_stream_*`, `jsrf_light_stream_*`, `jsrf_spec_stream_*`.
+5. The generation and decode gates green: `jsrf_check_back_edges` (every back edge in generated, recovered and relifted code carries a hook) and `jsrf_vsh_mask_rule` (the XBE scanner's input-mask decode agrees with the host tool's).
 
 ## 11. Runtime acceptance
 
@@ -201,6 +203,7 @@ Where our deltas live. Each is a candidate to propose upstream or to delete.
   §31.88). The retained per-vertex facing-away flip (L82) is not proposed: xemu has no such flip.
 - `d02ed03`: fixed-function oD1 routing (`ff_specular`: lit oD1 = (0,0,0, attribute-4 alpha), SPECULAR_ENABLE off
   forces (0,0,0,1), non-separate specular passes attribute 4); no per-light pf term (TR §31.90, L87).
+- `9e10a2e`: `NtSuspendThread` / `NtResumeThread` go through `xbox_GuestCpuSuspend/Resume` under the guest lock; upstream's raw host `SuspendThread` deadlocks the FIFO queue when the target holds a ticket (TR §31.93, L88). Gate `36b1122` (`tests/guest_cpu`).
 - Not proposed: the texgen helper `cf185d0` is deliberately self-contained.
 
 **Delete after the next regeneration**
@@ -210,7 +213,7 @@ Where our deltas live. Each is a candidate to propose upstream or to delete.
 - The `xbox_VblankAckHeld` stub.
 
 **Pick-one decisions already made**
-- Serial mode over the gate (the gate diagnosis awaits a stronger model).
+- Serial mode stays the default until Q6b retires it; the gate diagnosis is done (TR §31.93).
 - Model vblank over bridge vblank.
 - kmem arena over the page allocator (worth a dedicated experiment).
 - The fork's APU IRQ path.
