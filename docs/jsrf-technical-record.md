@@ -8961,3 +8961,7 @@ with the gate, and the deletion of `RECOMP_GUEST_SERIAL` and `RECOMP_BACKEDGE` (
 item Q6b. The gated run is exploratory and one run; the gate-on frames were viewed, not compared
 against a serial-mode run. No performance comparison was made. A host-frozen suspended holder can still
 stop inside a host lock or at DISPATCH (L88).
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 9e10a2e / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 1c2096d..9e10a2e (3 commits: Q11 shared input-mask rule, the guest-lock suspend gate, the guest-lock suspend fix), toolkit pushed first on the owner's confirmation after `just audit both` (7 outgoing blobs, largest 66,917 bytes, 0 secret hits); upstream and nworkers push URLs remain DISABLED.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 939e362 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 8c44854..939e362 (6 commits: Q7 records, Q11 cross-check and provenance, the back-edge checker, the lifting scripts' back-edge hooks, Q6/Q11 records); 23 outgoing blobs, largest 696,310 bytes, 0 secret hits, no forbidden path.

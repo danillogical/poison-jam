@@ -38,7 +38,7 @@ owns shortcuts; `config/stop-chain.json` owns stops.
   the ICD from the cache, the runner-preflight fakes carry the save roots, `check-merge-structure.py`
   ignores an inherited `GIT_INDEX_FILE` (a real `git commit -- <paths>` passed the hook), and the
   guest-meter serial tests wait for their condition (100/100 under load).
-- Toolkit `1c2096d` and game `58ea0ca` are published (receipts in TR §31.90).
+- Toolkit `9e10a2e` and game `939e362` are published (receipts at the end of TR §31.93).
 - 2026-10-28, Q7: `0x1688F3` is an internal label named by a coincidental data word; the fatal trap
   stays and no code changes (TR §31.91, L65).
 - 2026-10-28, Q11 (R5): one vertex-program input-mask rule shared by the interpreter and the host tool,
